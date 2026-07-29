@@ -1,25 +1,29 @@
 {
   "expo": {
-    "name": "UysalKelimeler",
-    "slug": "UysalKelimeler",
+    "name": "Uysal Kelimeler",
+    "slug": "uysal-kelimeler",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "splash": {
-      "resizeMode": "contain",
       "backgroundColor": "#020617"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.sultanguvenlik.uysalkelimeler"
     },
     "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#020617"
-      }
+      "backgroundColor": "#020617",
+      "package": "com.sultanguvenlik.uysalkelimeler"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
     },
     "plugins": [
       "expo-router"
     ],
-    "scheme": "uysalkelimeler"
+    "scheme": "uysal-kelimeler"
   }
 }
