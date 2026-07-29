@@ -168,7 +168,7 @@ export default function OyunEkrani() {
 
         Alert.alert(
           "Bölüm Tamamlandı! 🎉",
-          `Tebrikler Abdullah! Bölüm ${currentLevelData.id} bitti, +100 Bonus Altın kazandınız!`,
+          `Tebrikler Hazretleri! Bölüm ${currentLevelData.id} bitti, +100 Bonus Altın kazandınız!`,
           [
             {
               text: "Sonraki Bölüme Geç",
@@ -224,7 +224,7 @@ export default function OyunEkrani() {
 
           Alert.alert(
             "Bölüm Tamamlandı! 🎉",
-            `Tebrikler Abdullah! Bölüm ${currentLevelData.id} bitti, +100 Bonus Altın kazandınız!`,
+            `Tebrikler Hazretleri! Bölüm ${currentLevelData.id} bitti, +100 Bonus Altın kazandınız!`,
             [
               {
                 text: "Sonraki Bölüme Geç",
@@ -335,14 +335,6 @@ export default function OyunEkrani() {
                 >
                   {renderWordSlotText(word)}
                 </Text>
-                {isFound && (
-                  <Ionicons
-                    name="book"
-                    size={10}
-                    color="#EAB308"
-                    style={styles.bookIcon}
-                  />
-                )}
               </TouchableOpacity>
             );
           })}
@@ -563,7 +555,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#1E293B",
     paddingHorizontal: 10,
-    position: "relative",
   },
   wordSlotActive: {
     borderColor: "#EAB308",
@@ -581,11 +572,6 @@ const styles = StyleSheet.create({
   },
   wordSlotHintedText: {
     color: "#38BDF8",
-  },
-  bookIcon: {
-    position: "absolute",
-    top: 4,
-    right: 4,
   },
   bottomSection: {
     justify: "flex-end",
@@ -670,7 +656,6 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 1,
   },
-  // Modal Stilleri
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(2, 6, 23, 0.85)",
