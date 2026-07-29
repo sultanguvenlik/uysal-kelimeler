@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,10 @@ import {
   Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+
+// Firebase Firestore Servisleri
+import { doc, updateDoc, increment } from "firebase/firestore";
+import { db } from "../../firebaseConfig";
 
 interface GameMode {
   id: string;
@@ -38,7 +42,7 @@ const GAME_MODES: GameMode[] = [
     id: "time_attack",
     title: "Zamana Karşı Yarış",
     description: "60 saniye içinde bulabildiğin kadar kelime bul, bonus altın kazan!",
-    rules: ["Süre 60 saniyedir.", "Hızlı kelimeler ekstra +5 saniye verir.", "Yüksek puan çarpanı aktiftir."],
+    rules: ["Süre 60 saniyedir.", "Hızlı kelimeler ekstra altın kazandırır.", "Zamana karşı odaklan!"],
     icon: "timer-outline",
     color: "#EF4444",
     unlocked: true,
@@ -67,6 +71,24 @@ const GAME_MODES: GameMode[] = [
 export default function ModlarEkrani() {
   const [activeModalMode, setActiveModalMode] = useState<GameMode | null>(null);
 
+  // Zamana Karşı Yarış State'leri
+  const [isTimeAttackActive, setIsTimeAttackActive] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(60);
+  const [score, setScore] = useState(0);
+
+  // Zamanlayıcı Motoru (Timer Engine)
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (isTimeAttackActive && timeLeft > 0) {
+      timer = setInterval(() => {
+        setTimeLeft((prev) => prev - 1);
+      }, 1000);
+    } else if (timeLeft === 0 && isTimeAttackActive) {
+      handleFinishTimeAttack();
+    }
+    return () => clearInterval(timer);
+  }, [isTimeAttackActive, timeLeft]);
+
   const handleCardPress = (mode: GameMode) => {
     if (!mode.unlocked) {
       Alert.alert(
@@ -76,24 +98,53 @@ export default function ModlarEkrani() {
       );
       return;
     }
-    // Ana menüye kaçışı engellemek için doğrudan iç durum (state) modalı tetiklenir
     setActiveModalMode(mode);
   };
 
   const handleStartGame = () => {
     if (!activeModalMode) return;
 
-    const modeTitle = activeModalMode.title;
-    setActiveModalMode(null);
-
-    if (activeModalMode.id === "classic") {
+    if (activeModalMode.id === "time_attack") {
+      setActiveModalMode(null);
+      setTimeLeft(60);
+      setScore(0);
+      setIsTimeAttackActive(true);
+    } else if (activeModalMode.id === "classic") {
+      setActiveModalMode(null);
       Alert.alert("Bilgi", "Klasik mod varsayılan 'Oyun' sekmesinde aktif durumdadır.");
     } else {
+      const modeTitle = activeModalMode.title;
+      setActiveModalMode(null);
       Alert.alert(
         "Mod Hazırlanıyor 🚀",
-        `"${modeTitle}" oynanış motoru hazırlanıyor! Çok yakında özel kurallarıyla burada yarışacaksınız.`,
-        [{ text: "Tamam" }]
+        `"${modeTitle}" oynanış motoru hazırlanıyor! Çok yakında özel kurallarıyla burada yarışacaksınız.`
       );
+    }
+  };
+
+  const handleScoreIncrease = () => {
+    setScore((prev) => prev + 50);
+  };
+
+  const handleFinishTimeAttack = async () => {
+    setIsTimeAttackActive(false);
+    const earnedCoins = Math.floor(score / 2);
+
+    try {
+      if (earnedCoins > 0) {
+        const userDocRef = doc(db, "users", "demo_user_id");
+        await updateDoc(userDocRef, {
+          coins: increment(earnedCoins),
+        });
+      }
+
+      Alert.alert(
+        "Süre Doldu! ⏱️",
+        `Tebrikler! Toplam Skor: ${score}\nKazanılan Altın: +${earnedCoins}`,
+        [{ text: "Harika!" }]
+      );
+    } catch (error) {
+      Alert.alert("Hata", "Ödül veritabanına işlenirken bir sorun oluştu.");
     }
   };
 
@@ -142,7 +193,7 @@ export default function ModlarEkrani() {
         </View>
       </ScrollView>
 
-      {/* Moda Özel Detay ve Başlatma Modalı (Stitch UI Dark overlay) */}
+      {/* Moda Özel Detay Modalı */}
       <Modal
         visible={!!activeModalMode}
         transparent={true}
@@ -181,6 +232,37 @@ export default function ModlarEkrani() {
             )}
           </View>
         </View>
+      </Modal>
+
+      {/* Zamana Karşı Yarış Oyun Arenası Modalı */}
+      <Modal visible={isTimeAttackActive} animationType="slide" transparent={false}>
+        <SafeAreaView style={styles.timeAttackContainer}>
+          <View style={styles.timeAttackHeader}>
+            <View style={styles.timerBadge}>
+              <Ionicons name="time-outline" size={24} color="#EF4444" />
+              <Text style={styles.timerText}>{timeLeft}s</Text>
+            </View>
+
+            <View style={styles.scoreBadge}>
+              <Ionicons name="trophy" size={20} color="#EAB308" />
+              <Text style={styles.scoreText}>{score} Puan</Text>
+            </View>
+          </View>
+
+          <View style={styles.arenaContent}>
+            <Text style={styles.arenaTitle}>HIZLI KELİME DÜELLOSU</Text>
+            <Text style={styles.arenaSubtitle}>Butona tıklayarak kelime tamamla ve puan topla!</Text>
+
+            <TouchableOpacity style={styles.hitButton} activeOpacity={0.7} onPress={handleScoreIncrease}>
+              <Ionicons name="sparkles" size={40} color="#020617" />
+              <Text style={styles.hitButtonText}>KELİME BULDUM (+50)</Text>
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity style={styles.quitBtn} onPress={() => setIsTimeAttackActive(false)}>
+            <Text style={styles.quitBtnText}>Yarıştan Çık</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
@@ -285,11 +367,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
-  // Modal Stilleri
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(2, 6, 23, 0.85)",
-    justifyContent: "center",
+    justify: "center",
     alignItems: "center",
     paddingHorizontal: 20,
   },
@@ -364,5 +445,98 @@ const styles = StyleSheet.create({
     color: "#64748B",
     fontWeight: "700",
     fontSize: 14,
+  },
+  // Time Attack Arena Stilleri
+  timeAttackContainer: {
+    flex: 1,
+    backgroundColor: "#020617",
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight || 20 : 0,
+    justify: "space-between",
+    paddingBottom: 30,
+  },
+  timeAttackHeader: {
+    flexDirection: "row",
+    justify: "space-between",
+    alignItems: "center",
+    marginTop: 10,
+  },
+  timerBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(239, 68, 68, 0.15)",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(239, 68, 68, 0.4)",
+  },
+  timerText: {
+    color: "#EF4444",
+    fontSize: 20,
+    fontWeight: "900",
+  },
+  scoreBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#0F172A",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#1E293B",
+  },
+  scoreText: {
+    color: "#EAB308",
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  arenaContent: {
+    alignItems: "center",
+    justify: "center",
+    gap: 20,
+  },
+  arenaTitle: {
+    color: "#F8FAFC",
+    fontSize: 24,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
+  arenaSubtitle: {
+    color: "#64748B",
+    fontSize: 14,
+    textAlign: "center",
+  },
+  hitButton: {
+    backgroundColor: "#EAB308",
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    alignItems: "center",
+    justify: "center",
+    gap: 10,
+    elevation: 10,
+    shadowColor: "#EAB308",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+  },
+  hitButtonText: {
+    color: "#020617",
+    fontWeight: "900",
+    fontSize: 16,
+    textAlign: "center",
+  },
+  quitBtn: {
+    alignSelf: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+  },
+  quitBtnText: {
+    color: "#64748B",
+    fontWeight: "700",
+    fontSize: 15,
   },
 });
