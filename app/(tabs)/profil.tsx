@@ -10,100 +10,156 @@ import {
   StatusBar,
   ScrollView,
   Alert,
+  Image,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-// Firebase Firestore Servisleri
-import { doc, onSnapshot, setDoc } from "firebase/firestore";
-import { db } from "../../firebaseConfig";
+// Firebase Servisleri
+import {
+  doc,
+  onSnapshot,
+  setDoc,
+} from "firebase/firestore";
+import {
+  signInAnonymously,
+  signOut,
+  onAuthStateChanged,
+  User,
+} from "firebase/auth";
+import { auth, db } from "../../firebaseConfig";
 
 export default function ProfilEkrani() {
-  const [username, setUsername] = useState("Abdullah");
+  const [user, setUser] = useState<User | null>(null);
+  const [username, setUsername] = useState("Oyuncu");
   const [newUsername, setNewUsername] = useState("");
   const [coins, setCoins] = useState(0);
   const [currentLevel, setCurrentLevel] = useState(1);
   const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(true);
 
+  // Oturum Durumunu Dinleme
   useEffect(() => {
-    const userDocRef = doc(db, "users", "demo_user_id");
+    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setLoading(false);
 
-    // Firestore'dan canlı dinleme
-    const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setUsername(data.username || "Abdullah");
-        setCoins(data.coins || 0);
-        setCurrentLevel(data.currentLevel || 1);
+      if (currentUser) {
+        // Kullanıcıya özel Firestore dokümanını dinle
+        const userDocRef = doc(db, "users", currentUser.uid);
+        const unsubscribeDoc = onSnapshot(userDocRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setUsername(data.username || currentUser.displayName || "Oyuncu");
+            setCoins(data.coins ?? 1000);
+            setCurrentLevel(data.currentLevel ?? 1);
+          } else {
+            // İlk kez giriş yapan kullanıcıya varsayılan veri oluştur
+            const initialName = currentUser.displayName || "Yeni Oyuncu";
+            setDoc(userDocRef, {
+              username: initialName,
+              coins: 1000,
+              currentLevel: 1,
+              email: currentUser.email || "misafir@uysal.com",
+            });
+          }
+        });
+
+        return () => unsubscribeDoc();
       }
     });
 
-    return () => unsubscribe();
+    return () => unsubscribeAuth();
   }, []);
 
-  // İsmi Firestore'da Güncelleme
-  const handleSaveUsername = async () => {
-    if (!newUsername.trim()) {
-      Alert.alert("Hata", "Lütfen geçerli bir kullanıcı adı girin.");
-      return;
+  // Misafir Girişi
+  const handleGuestLogin = async () => {
+    try {
+      setLoading(true);
+      await signInAnonymously(auth);
+    } catch (error) {
+      Alert.alert("Giriş Hatası", "Misafir girişi yapılırken bir sorun oluştu.");
+      setLoading(false);
     }
+  };
+
+  // Çıkış Yapma
+  const handleSignOut = () => {
+    Alert.alert("Çıkış Yap", "Hesabınızdan çıkış yapmak istediğinize emin misiniz?", [
+      { text: "Vazgeç", style: "cancel" },
+      {
+        text: "Çıkış Yap",
+        style: "destructive",
+        onPress: () => signOut(auth),
+      },
+    ]);
+  };
+
+  // İsim Güncelleme
+  const handleSaveUsername = async () => {
+    if (!newUsername.trim() || !user) return;
 
     try {
-      const userDocRef = doc(db, "users", "demo_user_id");
-      await setDoc(
-        userDocRef,
-        { username: newUsername.trim() },
-        { merge: true }
-      );
-
+      const userDocRef = doc(db, "users", user.uid);
+      await setDoc(userDocRef, { username: newUsername.trim() }, { merge: true });
       setIsEditing(false);
       setNewUsername("");
-      Alert.alert("Başarılı! 🎉", "Kullanıcı adınız başarıyla güncellendi.");
+      Alert.alert("Başarılı! 🎉", "Profil isminiz güncellendi.");
     } catch (error) {
-      Alert.alert("Hata", "Kullanıcı adı güncellenirken bir sorun oluştu.");
+      Alert.alert("Hata", "İsim güncellenirken bir hata oluştu.");
     }
   };
 
-  // İlerlemeyi Sıfırlama (Reset Progress)
-  const handleResetProgress = () => {
-    Alert.alert(
-      "Hesabı Sıfırla",
-      "Tüm seviye ilerlemeniz ve puanlarınız varsayılan değere döndürülecek. Emin misiniz?",
-      [
-        { text: "Vazgeç", style: "cancel" },
-        {
-          text: "Sıfırla",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const userDocRef = doc(db, "users", "demo_user_id");
-              await setDoc(
-                userDocRef,
-                { coins: 1000, currentLevel: 1 },
-                { merge: true }
-              );
-              Alert.alert("Sıfırlandı", "İlerlemeniz başarıyla sıfırlandı.");
-            } catch (error) {
-              Alert.alert("Hata", "Sıfırlama işlemi başarısız oldu.");
-            }
-          },
-        },
-      ]
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, styles.center]}>
+        <ActivityIndicator size="large" color="#EAB308" />
+      </SafeAreaView>
     );
-  };
+  }
 
+  // OTURUM AÇILMAMIŞSA: Giriş Seçenekleri Kartı
+  if (!user) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>HESAP GİRİŞİ</Text>
+        </View>
+
+        <View style={styles.loginContainer}>
+          <Ionicons name="shield-checkmark-sharp" size={72} color="#EAB308" />
+          <Text style={styles.loginTitle}>İlerlemeni Güvenceye Al</Text>
+          <Text style={styles.loginSub}>
+            Kazanılan altınlar, kalınan seviyeler ve liderlik tablosu skorların kaybolmasın.
+          </Text>
+
+          <TouchableOpacity style={styles.googleBtn} onPress={handleGuestLogin}>
+            <Ionicons name="logo-google" size={20} color="#020617" />
+            <Text style={styles.googleBtnText}>Google İle Hızlı Giriş Yap</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.guestBtn} onPress={handleGuestLogin}>
+            <Text style={styles.guestBtnText}>Misafir Olarak Devam Et</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // OTURUM AÇILMIŞSA: Profil Paneli
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>PROFİL</Text>
+        <Text style={styles.headerTitle}>PROFİLİM</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Profil Kartı */}
         <View style={styles.profileCard}>
-          <View style={styles.avatarContainer}>
+          {user.photoURL ? (
+            <Image source={{ uri: user.photoURL }} style={styles.avatarImage} />
+          ) : (
             <Ionicons name="person-circle" size={80} color="#EAB308" />
-          </View>
+          )}
 
           {isEditing ? (
             <View style={styles.editRow}>
@@ -130,10 +186,9 @@ export default function ProfilEkrani() {
             </View>
           )}
 
-          <Text style={styles.userRole}>Oyuncu ID: demo_user_id</Text>
+          <Text style={styles.userRole}>UID: {user.uid.slice(0, 12)}...</Text>
         </View>
 
-        {/* İstatistikler */}
         <Text style={styles.sectionTitle}>İstatistikler</Text>
         <View style={styles.statsGrid}>
           <View style={styles.statBox}>
@@ -149,12 +204,11 @@ export default function ProfilEkrani() {
           </View>
         </View>
 
-        {/* Aksiyonlar */}
-        <Text style={styles.sectionTitle}>Ayarlar & İşlemler</Text>
+        <Text style={styles.sectionTitle}>Hesap Ayarları</Text>
         <View style={styles.actionContainer}>
-          <TouchableOpacity style={styles.actionBtn} onPress={handleResetProgress}>
-            <Ionicons name="refresh-circle-outline" size={22} color="#EF4444" />
-            <Text style={styles.resetBtnText}>İlerlemeyi Sıfırla (Test)</Text>
+          <TouchableOpacity style={styles.actionBtn} onPress={handleSignOut}>
+            <Ionicons name="log-out-outline" size={22} color="#EF4444" />
+            <Text style={styles.signOutBtnText}>Oturumu Kapat</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -167,6 +221,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#020617",
     paddingTop: Platform.OS === "android" ? StatusBar.currentHeight || 20 : 0,
+  },
+  center: {
+    justify: "center",
+    alignItems: "center",
   },
   header: {
     alignItems: "center",
@@ -185,6 +243,50 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 40,
   },
+  loginContainer: {
+    flex: 1,
+    alignItems: "center",
+    justify: "center",
+    paddingHorizontal: 30,
+    gap: 16,
+  },
+  loginTitle: {
+    color: "#F8FAFC",
+    fontSize: 22,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  loginSub: {
+    color: "#64748B",
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  googleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#EAB308",
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    width: "100%",
+    justify: "center",
+  },
+  googleBtnText: {
+    color: "#020617",
+    fontWeight: "900",
+    fontSize: 15,
+  },
+  guestBtn: {
+    paddingVertical: 12,
+  },
+  guestBtnText: {
+    color: "#64748B",
+    fontWeight: "700",
+    fontSize: 14,
+  },
   profileCard: {
     backgroundColor: "#0F172A",
     borderRadius: 20,
@@ -194,8 +296,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#1E293B",
   },
-  avatarContainer: {
-    marginBottom: 8,
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginBottom: 12,
   },
   usernameRow: {
     flexDirection: "row",
@@ -281,7 +386,7 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 16,
   },
-  resetBtnText: {
+  signOutBtnText: {
     color: "#EF4444",
     fontWeight: "700",
     fontSize: 14,
