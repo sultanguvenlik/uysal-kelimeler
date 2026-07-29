@@ -12,6 +12,7 @@ import {
   Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 
 // Firebase Firestore Servisleri
 import { doc, updateDoc, increment } from "firebase/firestore";
@@ -90,6 +91,7 @@ export default function ModlarEkrani() {
   }, [isTimeAttackActive, timeLeft]);
 
   const handleCardPress = (mode: GameMode) => {
+    Haptics.selectionAsync();
     if (!mode.unlocked) {
       Alert.alert(
         "Kilitli Mod!",
@@ -103,6 +105,7 @@ export default function ModlarEkrani() {
 
   const handleStartGame = () => {
     if (!activeModalMode) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     if (activeModalMode.id === "time_attack") {
       setActiveModalMode(null);
@@ -123,10 +126,13 @@ export default function ModlarEkrani() {
   };
 
   const handleScoreIncrease = () => {
+    // Dokunsal Titreşim Tetiklemesi
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setScore((prev) => prev + 50);
   };
 
   const handleFinishTimeAttack = async () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setIsTimeAttackActive(false);
     const earnedCoins = Math.floor(score / 2);
 
@@ -446,7 +452,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 14,
   },
-  // Time Attack Arena Stilleri
   timeAttackContainer: {
     flex: 1,
     backgroundColor: "#020617",
