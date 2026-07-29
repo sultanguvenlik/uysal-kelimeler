@@ -16,11 +16,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 
 // Firebase Servisleri
-import {
-  doc,
-  onSnapshot,
-  setDoc,
-} from "firebase/firestore";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import {
   signInAnonymously,
   signOut,
@@ -47,23 +43,31 @@ export default function ProfilEkrani() {
       if (currentUser) {
         // Kullanıcıya özel Firestore dokümanını dinle
         const userDocRef = doc(db, "users", currentUser.uid);
-        const unsubscribeDoc = onSnapshot(userDocRef, (docSnap) => {
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            setUsername(data.username || currentUser.displayName || "Oyuncu");
-            setCoins(data.coins ?? 1000);
-            setCurrentLevel(data.currentLevel ?? 1);
-          } else {
-            // İlk kez giriş yapan kullanıcıya varsayılan veri oluştur
-            const initialName = currentUser.displayName || "Yeni Oyuncu";
-            setDoc(userDocRef, {
-              username: initialName,
-              coins: 1000,
-              currentLevel: 1,
-              email: currentUser.email || "misafir@uysal.com",
-            });
+        const unsubscribeDoc = onSnapshot(
+          userDocRef,
+          (docSnap) => {
+            if (docSnap.exists()) {
+              const data = docSnap.data();
+              setUsername(data.username || currentUser.displayName || "Oyuncu");
+              setCoins(data.coins ?? 1000);
+              setCurrentLevel(data.currentLevel ?? 1);
+            } else {
+              // İlk kez giriş yapan kullanıcıya varsayılan veri oluştur
+              const initialName =
+                currentUser.displayName ||
+                `Oyuncu_${currentUser.uid.slice(0, 5)}`;
+              setDoc(userDocRef, {
+                username: initialName,
+                coins: 1000,
+                currentLevel: 1,
+                email: currentUser.email || "misafir@uysal.com",
+              });
+            }
+          },
+          (error) => {
+            console.error("Firestore Dinleme Hatası:", error);
           }
-        });
+        );
 
         return () => unsubscribeDoc();
       }
@@ -72,27 +76,35 @@ export default function ProfilEkrani() {
     return () => unsubscribeAuth();
   }, []);
 
-  // Misafir Girişi
+  // Misafir / Hızlı Giriş
   const handleGuestLogin = async () => {
     try {
       setLoading(true);
       await signInAnonymously(auth);
-    } catch (error) {
-      Alert.alert("Giriş Hatası", "Misafir girişi yapılırken bir sorun oluştu.");
+    } catch (error: any) {
       setLoading(false);
+      console.error("Giriş Hatası Detayı:", error);
+      Alert.alert(
+        "Giriş Hatası",
+        error.message || "Giriş yapılırken bir sorun oluştu."
+      );
     }
   };
 
   // Çıkış Yapma
   const handleSignOut = () => {
-    Alert.alert("Çıkış Yap", "Hesabınızdan çıkış yapmak istediğinize emin misiniz?", [
-      { text: "Vazgeç", style: "cancel" },
-      {
-        text: "Çıkış Yap",
-        style: "destructive",
-        onPress: () => signOut(auth),
-      },
-    ]);
+    Alert.alert(
+      "Çıkış Yap",
+      "Hesabınızdan çıkış yapmak istediğinize emin misiniz?",
+      [
+        { text: "Vazgeç", style: "cancel" },
+        {
+          text: "Çıkış Yap",
+          style: "destructive",
+          onPress: () => signOut(auth),
+        },
+      ]
+    );
   };
 
   // İsim Güncelleme
@@ -101,7 +113,11 @@ export default function ProfilEkrani() {
 
     try {
       const userDocRef = doc(db, "users", user.uid);
-      await setDoc(userDocRef, { username: newUsername.trim() }, { merge: true });
+      await setDoc(
+        userDocRef,
+        { username: newUsername.trim() },
+        { merge: true }
+      );
       setIsEditing(false);
       setNewUsername("");
       Alert.alert("Başarılı! 🎉", "Profil isminiz güncellendi.");
@@ -133,12 +149,20 @@ export default function ProfilEkrani() {
             Kazanılan altınlar, kalınan seviyeler ve liderlik tablosu skorların kaybolmasın.
           </Text>
 
-          <TouchableOpacity style={styles.googleBtn} onPress={handleGuestLogin}>
+          <TouchableOpacity
+            style={styles.googleBtn}
+            onPress={handleGuestLogin}
+            activeOpacity={0.8}
+          >
             <Ionicons name="logo-google" size={20} color="#020617" />
             <Text style={styles.googleBtnText}>Google İle Hızlı Giriş Yap</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.guestBtn} onPress={handleGuestLogin}>
+          <TouchableOpacity
+            style={styles.guestBtn}
+            onPress={handleGuestLogin}
+            activeOpacity={0.7}
+          >
             <Text style={styles.guestBtnText}>Misafir Olarak Devam Et</Text>
           </TouchableOpacity>
         </View>
@@ -153,7 +177,10 @@ export default function ProfilEkrani() {
         <Text style={styles.headerTitle}>PROFİLİM</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.profileCard}>
           {user.photoURL ? (
             <Image source={{ uri: user.photoURL }} style={styles.avatarImage} />
@@ -170,10 +197,16 @@ export default function ProfilEkrani() {
                 placeholder="Yeni İsim..."
                 placeholderTextColor="#64748B"
               />
-              <TouchableOpacity style={styles.saveBtn} onPress={handleSaveUsername}>
+              <TouchableOpacity
+                style={styles.saveBtn}
+                onPress={handleSaveUsername}
+              >
                 <Ionicons name="checkmark" size={20} color="#020617" />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setIsEditing(false)}>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setIsEditing(false)}
+              >
                 <Ionicons name="close" size={20} color="#F8FAFC" />
               </TouchableOpacity>
             </View>
@@ -223,7 +256,7 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === "android" ? StatusBar.currentHeight || 20 : 0,
   },
   center: {
-    justify: "center",
+    justifyContent: "center",
     alignItems: "center",
   },
   header: {
