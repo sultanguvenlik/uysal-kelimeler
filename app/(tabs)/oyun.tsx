@@ -10,6 +10,7 @@ import {
   Dimensions,
   Alert,
   ScrollView,
+  Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -30,7 +31,7 @@ export default function OyunEkrani() {
   const [selectedCategory, setSelectedCategory] = useState("Tüm Kategoriler");
   const [currentLevelIndex, setCurrentLevelIndex] = useState(0);
 
-  // Kategoriye Göre Seviye Filtreleme
+  // Kategori Filtreleme
   const filteredLevels =
     selectedCategory === "Tüm Kategoriler"
       ? GAME_LEVELS
@@ -47,6 +48,12 @@ export default function OyunEkrani() {
   const [score, setScore] = useState(1000);
   const [foundWords, setFoundWords] = useState<string[]>([]);
   const [revealedHints, setRevealedHints] = useState<Record<string, number[]>>({});
+
+  // Sözlük Modal State
+  const [selectedWordDefinition, setSelectedWordDefinition] = useState<{
+    word: string;
+    def: string;
+  } | null>(null);
 
   useEffect(() => {
     setShuffledLetters(currentLevelData.letters);
@@ -92,7 +99,6 @@ export default function OyunEkrani() {
     }
   };
 
-  // Harfleri Karıştırma Mantığı
   const handleShuffleLetters = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const shuffled = [...shuffledLetters].sort(() => Math.random() - 0.5);
@@ -100,13 +106,12 @@ export default function OyunEkrani() {
     setSelectedIndexes([]);
   };
 
-  // Seçili Harfleri Temizleme
   const handleClearSelection = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedIndexes([]);
   };
 
-  // İpucu Kullanma Mantığı (Otomatik Bölüm Bitti Kontrollü)
+  // İpucu Kullanımı
   const handleUseHint = () => {
     const HINT_COST = 50;
 
@@ -151,14 +156,12 @@ export default function OyunEkrani() {
       const updatedHints = { ...revealedHints, [targetWord]: openedList };
       setRevealedHints(updatedHints);
 
-      // İpucu ile KELİME TAMAMLANDI MI?
       let updatedFound = [...foundWords];
       if (openedList.length === targetWord.length) {
         updatedFound = [...foundWords, targetWord];
         setFoundWords(updatedFound);
       }
 
-      // Bölüm Bitti mi?
       if (updatedFound.length === currentLevelData.targetWords.length) {
         const nextLevelNumber = currentLevelData.id + 1;
         syncProgressToFirestore(-HINT_COST + 100, nextLevelNumber);
@@ -191,6 +194,17 @@ export default function OyunEkrani() {
       setSelectedIndexes(selectedIndexes.filter((i) => i !== index));
     } else {
       setSelectedIndexes([...selectedIndexes, index]);
+    }
+  };
+
+  // Bulunan Kelimeye Dokunup Sözlük Açma
+  const handleWordSlotPress = (word: string) => {
+    const isFound = foundWords.includes(word);
+    if (isFound) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const def =
+        currentLevelData.definitions[word] || "Bu kelimenin açıklaması mevcut.";
+      setSelectedWordDefinition({ word, def });
     }
   };
 
@@ -291,17 +305,22 @@ export default function OyunEkrani() {
         </ScrollView>
       </View>
 
-      {/* Bulunacak Kelimeler Izgarası (Ferah Üst Alan) */}
+      {/* Bulunacak Kelimeler Izgarası */}
       <ScrollView contentContainerStyle={styles.wordsContainer}>
         <Text style={styles.sectionHeader}>BULUNACAK KELİMELER</Text>
+        <Text style={styles.sectionSubHint}>
+          (Bulduğun kelimelerin üzerine dokunarak sözlük anlamını oku!)
+        </Text>
         <View style={styles.wordsGrid}>
           {currentLevelData.targetWords.map((word, idx) => {
             const isFound = foundWords.includes(word);
             const hasHints = (revealedHints[word] || []).length > 0;
 
             return (
-              <View
+              <TouchableOpacity
                 key={idx}
+                activeOpacity={isFound ? 0.7 : 1}
+                onPress={() => handleWordSlotPress(word)}
                 style={[
                   styles.wordSlot,
                   isFound && styles.wordSlotActive,
@@ -316,15 +335,22 @@ export default function OyunEkrani() {
                 >
                   {renderWordSlotText(word)}
                 </Text>
-              </View>
+                {isFound && (
+                  <Ionicons
+                    name="book"
+                    size={10}
+                    color="#EAB308"
+                    style={styles.bookIcon}
+                  />
+                )}
+              </TouchableOpacity>
             );
           })}
         </View>
       </ScrollView>
 
-      {/* Alt Bölüm: Çark ve Aksiyon Butonları (Aşağıya Sabitlendi) */}
+      {/* Alt Bölüm: Çark ve Aksiyon Butonları */}
       <View style={styles.bottomSection}>
-        {/* Anlık Seçilen Kelime */}
         <View style={styles.currentWordContainer}>
           <Text style={styles.currentWordTitle}>
             {currentWord ? currentWord : "Harfleri Seçin"}
@@ -368,9 +394,8 @@ export default function OyunEkrani() {
           </View>
         </View>
 
-        {/* Alt Aksiyon Butonları (Karıştır - Kontrol Et - Sil - İpucu) */}
+        {/* Alt Aksiyon Butonları */}
         <View style={styles.bottomBar}>
-          {/* Karıştır */}
           <TouchableOpacity
             style={styles.iconCircleBtn}
             activeOpacity={0.8}
@@ -379,7 +404,6 @@ export default function OyunEkrani() {
             <Ionicons name="shuffle-sharp" size={22} color="#38BDF8" />
           </TouchableOpacity>
 
-          {/* Temizle/Sil */}
           <TouchableOpacity
             style={styles.iconCircleBtn}
             activeOpacity={0.8}
@@ -388,7 +412,6 @@ export default function OyunEkrani() {
             <Ionicons name="trash-outline" size={22} color="#EF4444" />
           </TouchableOpacity>
 
-          {/* Kontrol Et */}
           <TouchableOpacity
             style={styles.mainActionBtn}
             activeOpacity={0.85}
@@ -397,7 +420,6 @@ export default function OyunEkrani() {
             <Text style={styles.mainActionBtnText}>KONTROL ET</Text>
           </TouchableOpacity>
 
-          {/* İpucu */}
           <TouchableOpacity
             style={styles.iconCircleBtn}
             activeOpacity={0.8}
@@ -407,6 +429,35 @@ export default function OyunEkrani() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Sözlük Modal Kartı */}
+      <Modal
+        visible={!!selectedWordDefinition}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setSelectedWordDefinition(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Ionicons name="book-sharp" size={28} color="#EAB308" />
+              <Text style={styles.modalWordTitle}>
+                {selectedWordDefinition?.word}
+              </Text>
+            </View>
+            <Text style={styles.modalDefText}>
+              {selectedWordDefinition?.def}
+            </Text>
+
+            <TouchableOpacity
+              style={styles.closeBtn}
+              onPress={() => setSelectedWordDefinition(null)}
+            >
+              <Text style={styles.closeBtnText}>Anladım / Kapat</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -489,6 +540,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "800",
     letterSpacing: 1.5,
+  },
+  sectionSubHint: {
+    color: "#475569",
+    fontSize: 10,
+    fontWeight: "600",
     marginBottom: 10,
   },
   wordsGrid: {
@@ -507,6 +563,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#1E293B",
     paddingHorizontal: 10,
+    position: "relative",
   },
   wordSlotActive: {
     borderColor: "#EAB308",
@@ -524,6 +581,11 @@ const styles = StyleSheet.create({
   },
   wordSlotHintedText: {
     color: "#38BDF8",
+  },
+  bookIcon: {
+    position: "absolute",
+    top: 4,
+    right: 4,
   },
   bottomSection: {
     justify: "flex-end",
@@ -607,5 +669,49 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "900",
     letterSpacing: 1,
+  },
+  // Modal Stilleri
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(2, 6, 23, 0.85)",
+    justify: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#0F172A",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: "#1E293B",
+    gap: 12,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  modalWordTitle: {
+    color: "#F8FAFC",
+    fontSize: 22,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
+  modalDefText: {
+    color: "#94A3B8",
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  closeBtn: {
+    backgroundColor: "#EAB308",
+    height: 46,
+    borderRadius: 23,
+    alignItems: "center",
+    justify: "center",
+    marginTop: 10,
+  },
+  closeBtnText: {
+    color: "#020617",
+    fontWeight: "900",
+    fontSize: 14,
   },
 });
