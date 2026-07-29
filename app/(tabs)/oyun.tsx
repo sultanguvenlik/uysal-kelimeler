@@ -41,6 +41,11 @@ export default function OyunEkrani() {
   const currentLevelData: LevelData =
     activeLevels[currentLevelIndex] || activeLevels[0];
 
+  // Kelimeleri Uzunluklarına Göre Sıralama (5 Harfliler, 4 Harfliler...)
+  const sortedTargetWords = [...currentLevelData.targetWords].sort(
+    (a, b) => b.length - a.length
+  );
+
   const [shuffledLetters, setShuffledLetters] = useState<string[]>(
     currentLevelData.letters
   );
@@ -125,7 +130,7 @@ export default function OyunEkrani() {
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    const uncompleteWords = currentLevelData.targetWords.filter(
+    const uncompleteWords = sortedTargetWords.filter(
       (w) => !foundWords.includes(w)
     );
 
@@ -162,13 +167,13 @@ export default function OyunEkrani() {
         setFoundWords(updatedFound);
       }
 
-      if (updatedFound.length === currentLevelData.targetWords.length) {
+      if (updatedFound.length === sortedTargetWords.length) {
         const nextLevelNumber = currentLevelData.id + 1;
         syncProgressToFirestore(-HINT_COST + 100, nextLevelNumber);
 
         Alert.alert(
           "Bölüm Tamamlandı! 🎉",
-          `Tebrikler Hazretleri! Bölüm ${currentLevelData.id} bitti, +100 Bonus Altın kazandınız!`,
+          `Tebrikler Abdullah! Bölüm ${currentLevelData.id} bitti, +100 Bonus Altın kazandınız!`,
           [
             {
               text: "Sonraki Bölüme Geç",
@@ -197,7 +202,6 @@ export default function OyunEkrani() {
     }
   };
 
-  // Bulunan Kelimeye Dokunup Sözlük Açma
   const handleWordSlotPress = (word: string) => {
     const isFound = foundWords.includes(word);
     if (isFound) {
@@ -211,20 +215,20 @@ export default function OyunEkrani() {
   const handleCheck = () => {
     if (!currentWord) return;
 
-    if (currentLevelData.targetWords.includes(currentWord)) {
+    if (sortedTargetWords.includes(currentWord)) {
       if (!foundWords.includes(currentWord)) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         const updatedFound = [...foundWords, currentWord];
         setFoundWords(updatedFound);
         const rewardCoins = currentWord.length * 10;
 
-        if (updatedFound.length === currentLevelData.targetWords.length) {
+        if (updatedFound.length === sortedTargetWords.length) {
           const nextLevelNumber = currentLevelData.id + 1;
           syncProgressToFirestore(rewardCoins + 100, nextLevelNumber);
 
           Alert.alert(
             "Bölüm Tamamlandı! 🎉",
-            `Tebrikler Hazretleri! Bölüm ${currentLevelData.id} bitti, +100 Bonus Altın kazandınız!`,
+            `Tebrikler Abdullah! Bölüm ${currentLevelData.id} bitti, +100 Bonus Altın kazandınız!`,
             [
               {
                 text: "Sonraki Bölüme Geç",
@@ -251,17 +255,6 @@ export default function OyunEkrani() {
       Alert.alert("Hata ❌", "Geçersiz kelime.");
       setSelectedIndexes([]);
     }
-  };
-
-  const renderWordSlotText = (word: string) => {
-    const isFound = foundWords.includes(word);
-    if (isFound) return word;
-
-    const hints = revealedHints[word] || [];
-    return word
-      .split("")
-      .map((char, index) => (hints.includes(index) ? char : "•"))
-      .join(" ");
   };
 
   return (
@@ -305,36 +298,51 @@ export default function OyunEkrani() {
         </ScrollView>
       </View>
 
-      {/* Bulunacak Kelimeler Izgarası */}
+      {/* Bulmaca Izgarası (Harf Harf Kare Kutucuklar) */}
       <ScrollView contentContainerStyle={styles.wordsContainer}>
         <Text style={styles.sectionHeader}>BULUNACAK KELİMELER</Text>
         <Text style={styles.sectionSubHint}>
-          (Bulduğun kelimelerin üzerine dokunarak sözlük anlamını oku!)
+          (Bulduğun kelimelere dokunarak sözlük anlamını oku!)
         </Text>
-        <View style={styles.wordsGrid}>
-          {currentLevelData.targetWords.map((word, idx) => {
+
+        <View style={styles.puzzleGrid}>
+          {sortedTargetWords.map((word, wordIdx) => {
             const isFound = foundWords.includes(word);
-            const hasHints = (revealedHints[word] || []).length > 0;
+            const hints = revealedHints[word] || [];
 
             return (
               <TouchableOpacity
-                key={idx}
+                key={`word-${wordIdx}`}
                 activeOpacity={isFound ? 0.7 : 1}
                 onPress={() => handleWordSlotPress(word)}
-                style={[
-                  styles.wordSlot,
-                  isFound && styles.wordSlotActive,
-                  !isFound && hasHints && styles.wordSlotHinted,
-                ]}
+                style={styles.wordRowContainer}
               >
-                <Text
-                  style={[
-                    styles.wordSlotText,
-                    !isFound && hasHints && styles.wordSlotHintedText,
-                  ]}
-                >
-                  {renderWordSlotText(word)}
-                </Text>
+                <View style={styles.wordRow}>
+                  {word.split("").map((char, charIdx) => {
+                    const isCharRevealed = isFound || hints.includes(charIdx);
+
+                    return (
+                      <View
+                        key={`char-${charIdx}`}
+                        style={[
+                          styles.letterBox,
+                          isFound && styles.letterBoxFound,
+                          !isFound && hints.includes(charIdx) && styles.letterBoxHinted,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.letterBoxText,
+                            isFound && styles.letterBoxTextFound,
+                            !isFound && hints.includes(charIdx) && styles.letterBoxTextHinted,
+                          ]}
+                        >
+                          {isCharRevealed ? char : ""}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
               </TouchableOpacity>
             );
           })}
@@ -537,40 +545,48 @@ const styles = StyleSheet.create({
     color: "#475569",
     fontSize: 10,
     fontWeight: "600",
-    marginBottom: 10,
+    marginBottom: 12,
   },
-  wordsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justify: "center",
+  puzzleGrid: {
+    alignItems: "center",
     gap: 8,
+    width: "100%",
   },
-  wordSlot: {
-    minWidth: 68,
-    height: 40,
+  wordRowContainer: {
+    paddingVertical: 2,
+  },
+  wordRow: {
+    flexDirection: "row",
+    gap: 6,
+    justify: "center",
+  },
+  letterBox: {
+    width: 34,
+    height: 38,
     backgroundColor: "#0F172A",
-    borderRadius: 12,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: "#334155",
     alignItems: "center",
     justify: "center",
-    borderWidth: 1,
-    borderColor: "#1E293B",
-    paddingHorizontal: 10,
   },
-  wordSlotActive: {
-    borderColor: "#EAB308",
-    backgroundColor: "rgba(234, 179, 8, 0.15)",
+  letterBoxFound: {
+    backgroundColor: "#EAB308",
+    borderColor: "#FACC15",
   },
-  wordSlotHinted: {
+  letterBoxHinted: {
+    backgroundColor: "rgba(56, 189, 248, 0.15)",
     borderColor: "#38BDF8",
-    backgroundColor: "rgba(56, 189, 248, 0.1)",
   },
-  wordSlotText: {
-    color: "#EAB308",
+  letterBoxText: {
+    color: "#F8FAFC",
     fontWeight: "900",
-    fontSize: 13,
-    letterSpacing: 1,
+    fontSize: 16,
   },
-  wordSlotHintedText: {
+  letterBoxTextFound: {
+    color: "#020617",
+  },
+  letterBoxTextHinted: {
     color: "#38BDF8",
   },
   bottomSection: {
