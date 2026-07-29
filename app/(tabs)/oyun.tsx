@@ -27,8 +27,11 @@ export default function OyunEkrani() {
   const currentLevelData = GAME_LEVELS[currentLevelIndex];
 
   const [selectedIndexes, setSelectedIndexes] = useState<number[]>([]);
-  const [score, setScore] = useState(250);
+  const [score, setScore] = useState(1150);
   const [foundWords, setFoundWords] = useState<string[]>([]);
+  
+  // Bulunmamış kelimelerde ipucu ile açılan harflerin indislerini saklar { "KALEM": [0, 1] }
+  const [revealedHints, setRevealedHints] = useState<Record<string, number[]>>({});
 
   const currentWord = selectedIndexes.map((i) => currentLevelData.letters[i]).join("");
 
@@ -46,9 +49,69 @@ export default function OyunEkrani() {
         },
         { merge: true }
       );
-      console.log("Firestore bölüm & puan senkronizasyonu BAŞARILI!");
+      console.log("Firestore senkronizasyonu BAŞARILI!");
     } catch (error) {
       console.log("Firestore Senkronizasyon Hatası:", error);
+    }
+  };
+
+  // İpucu Kullanma Mantığı (Yukarıdaki Kutucukta Harf Açma)
+  const handleUseHint = () => {
+    const HINT_COST = 50;
+
+    if (score < HINT_COST) {
+      Alert.alert(
+        "Yetersiz Altın!",
+        "İpucu almak için en az 50 altınınız olmalıdır. Market sekmesinden altın bakiyesi ekleyebilirsiniz.",
+        [{ text: "Tamam" }]
+      );
+      return;
+    }
+
+    // Henüz bulunmamış kelimeleri filtrele
+    const uncompleteWords = currentLevelData.targetWords.filter(
+      (w) => !foundWords.includes(w)
+    );
+
+    if (uncompleteWords.length === 0) {
+      Alert.alert("Tebrikler!", "Bu bölümdeki tüm kelimeler zaten tamamlandı!");
+      return;
+    }
+
+    // Tamamen açılmamış ilk kelimeyi bul
+    let targetWordToHint = "";
+    let charIndexToOpen = -1;
+
+    for (const word of uncompleteWords) {
+      const openedIndexes = revealedHints[word] || [];
+      if (openedIndexes.length < word.length) {
+        // Bu kelimede henüz açılmamış ilk harfin indeksini tespit et
+        for (let i = 0; i < word.length; i++) {
+          if (!openedIndexes.includes(i)) {
+            targetWordToHint = word;
+            charIndexToOpen = i;
+            break;
+          }
+        }
+      }
+      if (targetWordToHint) break;
+    }
+
+    if (targetWordToHint && charIndexToOpen !== -1) {
+      const currentWordHints = revealedHints[targetWordToHint] || [];
+      const updatedHints = {
+        ...revealedHints,
+        [targetWordToHint]: [...currentWordHints, charIndexToOpen],
+      };
+
+      setRevealedHints(updatedHints);
+      const newScore = score - HINT_COST;
+      setScore(newScore);
+
+      // Veritabanından -50 Altın Düş
+      syncProgressToFirestore(-HINT_COST, currentLevelData.id);
+    } else {
+      Alert.alert("Bilgi", "Açılabilecek başka ipucu kalmadı!");
     }
   };
 
@@ -81,7 +144,7 @@ export default function OyunEkrani() {
 
           Alert.alert(
             "Bölüm Tamamlandı! 🎉",
-            `Tebrikler Abdullah! Bölüm ${currentLevelData.id} bitti, +100 Bonus Altın kazandın!`,
+            `Tebrikler Hazretleri! Bölüm ${currentLevelData.id} bitti, +100 Bonus Altın kazandınız!`,
             [
               {
                 text: "Sonraki Bölüme Geç",
@@ -90,8 +153,9 @@ export default function OyunEkrani() {
                     setCurrentLevelIndex((prev) => prev + 1);
                     setFoundWords([]);
                     setSelectedIndexes([]);
+                    setRevealedHints({});
                   } else {
-                    Alert.alert("Efsane!", "Mevcut tüm bölümleri başarıyla bitirdin!");
+                    Alert.alert("Efsane!", "Mevcut tüm bölümleri başarıyla bitirdiniz!");
                   }
                 },
               },
@@ -99,16 +163,31 @@ export default function OyunEkrani() {
           );
         } else {
           syncProgressToFirestore(rewardCoins, currentLevelData.id);
-          Alert.alert("Doğru! 👏", `"${currentWord}" kelimesini buldun! (+${rewardCoins} Altın)`);
+          Alert.alert("Doğru! 👏", `"${currentWord}" kelimesini buldunuz! (+${rewardCoins} Altın)`);
         }
       } else {
-        Alert.alert("Bilgi", "Bu kelimeyi zaten buldun!");
+        Alert.alert("Bilgi", "Bu kelimeyi zaten buldunuz!");
       }
       setSelectedIndexes([]);
     } else {
       Alert.alert("Hata ❌", "Geçersiz veya listede olmayan kelime.");
       setSelectedIndexes([]);
     }
+  };
+
+  // İpucu ve Bulunma durumuna göre kelime harflerini oluşturan render fonksiyonu
+  const renderWordSlotText = (word: string) => {
+    const isFound = foundWords.includes(word);
+
+    if (isFound) {
+      return word;
+    }
+
+    const hints = revealedHints[word] || [];
+    return word
+      .split("")
+      .map((char, index) => (hints.includes(index) ? char : "•"))
+      .join(" ");
   };
 
   return (
@@ -125,19 +204,30 @@ export default function OyunEkrani() {
         </View>
       </View>
 
-      {/* Bulunan Kelimeler Izgarası */}
+      {/* Bulunan / İpucu Verilen Kelimeler Izgarası */}
       <View style={styles.wordsContainer}>
         <Text style={styles.sectionHeader}>BULUNACAK KELİMELER</Text>
         <View style={styles.wordsGrid}>
           {currentLevelData.targetWords.map((word, idx) => {
             const isFound = foundWords.includes(word);
+            const hasHints = (revealedHints[word] || []).length > 0;
+
             return (
               <View
                 key={idx}
-                style={[styles.wordSlot, isFound && styles.wordSlotActive]}
+                style={[
+                  styles.wordSlot,
+                  isFound && styles.wordSlotActive,
+                  !isFound && hasHints && styles.wordSlotHinted,
+                ]}
               >
-                <Text style={styles.wordSlotText}>
-                  {isFound ? word : "• ".repeat(word.length).trim()}
+                <Text
+                  style={[
+                    styles.wordSlotText,
+                    !isFound && hasHints && styles.wordSlotHintedText,
+                  ]}
+                >
+                  {renderWordSlotText(word)}
                 </Text>
               </View>
             );
@@ -208,7 +298,12 @@ export default function OyunEkrani() {
           <Text style={styles.mainActionBtnText}>KONTROL ET</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.iconCircleBtn} activeOpacity={0.8}>
+        {/* İpucu Alma Butonu (50 Altın) */}
+        <TouchableOpacity
+          style={styles.iconCircleBtn}
+          activeOpacity={0.8}
+          onPress={handleUseHint}
+        >
           <Ionicons name="bulb-outline" size={22} color="#EAB308" />
         </TouchableOpacity>
       </View>
@@ -285,17 +380,24 @@ const styles = StyleSheet.create({
     justify: "center",
     borderWidth: 1,
     borderColor: "#1E293B",
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
   },
   wordSlotActive: {
     borderColor: "#EAB308",
-    backgroundColor: "rgba(234, 179, 8, 0.1)",
+    backgroundColor: "rgba(234, 179, 8, 0.15)",
+  },
+  wordSlotHinted: {
+    borderColor: "#38BDF8",
+    backgroundColor: "rgba(56, 189, 248, 0.1)",
   },
   wordSlotText: {
     color: "#EAB308",
     fontWeight: "900",
-    fontSize: 13,
+    fontSize: 14,
     letterSpacing: 1,
+  },
+  wordSlotHintedText: {
+    color: "#38BDF8",
   },
   currentWordContainer: {
     alignItems: "center",
