@@ -2,177 +2,142 @@ import React, { useState } from "react";
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
   SafeAreaView,
+  TouchableOpacity,
+  Platform,
+  StatusBar,
   Dimensions,
   Alert,
-  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { GAME_LEVELS } from "../../constants/levels";
+
+// Firebase Firestore Servisleri
+import { doc, setDoc, increment } from "firebase/firestore";
 import { db } from "../../firebaseConfig";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 const { width } = Dimensions.get("window");
-const WHEEL_SIZE = width * 0.7;
-const RADIUS = WHEEL_SIZE / 2 - 35;
-const CENTER = WHEEL_SIZE / 2;
-
-const LEVELS = [
-  {
-    id: 1,
-    letters: ["K", "A", "L", "E", "M"],
-    targetWords: ["KALEM", "KALE", "ELMA", "LAKE", "KEL"],
-  },
-  {
-    id: 2,
-    letters: ["S", "E", "V", "G", "İ"],
-    targetWords: ["SEVGİ", "SEVİ", "GİSİ", "EVSİ"],
-  },
-];
+const WHEEL_SIZE = Math.min(width * 0.72, 290);
+const BUTTON_SIZE = 52;
+const RADIUS = WHEEL_SIZE / 2 - BUTTON_SIZE / 2 - 16;
 
 export default function OyunEkrani() {
   const [currentLevelIndex, setCurrentLevelIndex] = useState(0);
-  const currentLevel = LEVELS[currentLevelIndex];
+  const currentLevelData = GAME_LEVELS[currentLevelIndex];
 
-  const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
+  const [selectedIndexes, setSelectedIndexes] = useState<number[]>([]);
+  const [score, setScore] = useState(250);
   const [foundWords, setFoundWords] = useState<string[]>([]);
-  const [score, setScore] = useState(100);
-  const [hints, setHints] = useState<string[]>([]);
-  const [savingScore, setSavingScore] = useState(false);
 
-  // Harf Seçme
-  const handleLetterPress = (index: number) => {
-    if (!selectedIndices.includes(index)) {
-      setSelectedIndices([...selectedIndices, index]);
-    }
-  };
+  const currentWord = selectedIndexes.map((i) => currentLevelData.letters[i]).join("");
 
-  // Seçimi Temizleme
-  const handleClear = () => {
-    setSelectedIndices([]);
-  };
-
-  // Skoru Firebase Firestore'a Kaydetme Motoru
-  const saveScoreToFirebase = async (finalScore: number) => {
+  // Firestore Veritabanına Skoru ve Seviyeyi Senkronize Etme
+  const syncProgressToFirestore = async (addedCoins: number, nextLevelNum: number) => {
     try {
-      setSavingScore(true);
-      await addDoc(collection(db, "scores"), {
-        name: "Abdullah",
-        score: finalScore,
-        level: currentLevel.id,
-        createdAt: serverTimestamp(),
-      });
-      setSavingScore(false);
+      const userDocRef = doc(db, "users", "demo_user_id");
+
+      await setDoc(
+        userDocRef,
+        {
+          username: "Abdullah",
+          coins: increment(addedCoins),
+          currentLevel: nextLevelNum,
+        },
+        { merge: true }
+      );
+      console.log("Firestore bölüm & puan senkronizasyonu BAŞARILI!");
     } catch (error) {
-      console.log("Skor Firebase'e kaydedilemedi:", error);
-      setSavingScore(false);
+      console.log("Firestore Senkronizasyon Hatası:", error);
     }
   };
 
-  // Kelime Kontrolü
-  const handleSubmit = () => {
-    const formedWord = selectedIndices
-      .map((i) => currentLevel.letters[i])
-      .join("");
-
-    if (
-      currentLevel.targetWords.includes(formedWord) &&
-      !foundWords.includes(formedWord)
-    ) {
-      const updatedFound = [...foundWords, formedWord];
-      setFoundWords(updatedFound);
-      const newScore = score + formedWord.length * 20;
-      setScore(newScore);
-
-      // Bölüm Tamamlandı mı?
-      if (updatedFound.length === currentLevel.targetWords.length) {
-        saveScoreToFirebase(newScore);
-        Alert.alert("Tebrikler Abdullah! 🎉", "Bölümü tamamladın, skorun Liderlik Tablosuna işlendi!", [
-          { text: "Sonraki Bölüm", onPress: nextLevel },
-        ]);
-      }
-    }
-    setSelectedIndices([]);
-  };
-
-  // Sonraki Bölüm
-  const nextLevel = () => {
-    if (currentLevelIndex + 1 < LEVELS.length) {
-      setCurrentLevelIndex((prev) => prev + 1);
-      setFoundWords([]);
-      setSelectedIndices([]);
-      setHints([]);
+  const handleLetterPress = (index: number) => {
+    if (selectedIndexes.includes(index)) {
+      setSelectedIndexes(selectedIndexes.filter((i) => i !== index));
     } else {
-      Alert.alert("Efsane!", "Mevcut tüm bölümleri bitirdin.");
+      setSelectedIndexes([...selectedIndexes, index]);
     }
   };
 
-  // İpucu Satın Alma
-  const handleUseHint = () => {
-    if (score < 50) {
-      Alert.alert("Yetersiz Puan", "İpucu almak için en az 50 puan gerekli.");
-      return;
-    }
-    const uncollected = currentLevel.targetWords.filter(
-      (w) => !foundWords.includes(w) && !hints.includes(w)
-    );
-    if (uncollected.length > 0) {
-      setScore((s) => s - 50);
-      setHints((prev) => [...prev, uncollected[0]]);
-    }
+  const handleShuffle = () => {
+    setSelectedIndexes([]);
   };
 
-  const currentFormedWord = selectedIndices
-    .map((i) => currentLevel.letters[i])
-    .join("");
+  const handleCheck = () => {
+    if (!currentWord) return;
+
+    if (currentLevelData.targetWords.includes(currentWord)) {
+      if (!foundWords.includes(currentWord)) {
+        const updatedFound = [...foundWords, currentWord];
+        setFoundWords(updatedFound);
+        const rewardCoins = currentWord.length * 10;
+        setScore((prev) => prev + rewardCoins);
+
+        // Bölümdeki TÜM kelimeler tamamlandı mı?
+        if (updatedFound.length === currentLevelData.targetWords.length) {
+          const nextLevelNumber = currentLevelData.id + 1;
+          syncProgressToFirestore(rewardCoins + 100, nextLevelNumber);
+
+          Alert.alert(
+            "Bölüm Tamamlandı! 🎉",
+            `Tebrikler Abdullah! Bölüm ${currentLevelData.id} bitti, +100 Bonus Altın kazandın!`,
+            [
+              {
+                text: "Sonraki Bölüme Geç",
+                onPress: () => {
+                  if (currentLevelIndex + 1 < GAME_LEVELS.length) {
+                    setCurrentLevelIndex((prev) => prev + 1);
+                    setFoundWords([]);
+                    setSelectedIndexes([]);
+                  } else {
+                    Alert.alert("Efsane!", "Mevcut tüm bölümleri başarıyla bitirdin!");
+                  }
+                },
+              },
+            ]
+          );
+        } else {
+          syncProgressToFirestore(rewardCoins, currentLevelData.id);
+          Alert.alert("Doğru! 👏", `"${currentWord}" kelimesini buldun! (+${rewardCoins} Altın)`);
+        }
+      } else {
+        Alert.alert("Bilgi", "Bu kelimeyi zaten buldun!");
+      }
+      setSelectedIndexes([]);
+    } else {
+      Alert.alert("Hata ❌", "Geçersiz veya listede olmayan kelime.");
+      setSelectedIndexes([]);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Üst Bilgi Barı */}
+      {/* Üst Bar */}
       <View style={styles.header}>
-        <View style={styles.levelBadge}>
-          <Text style={styles.levelText}>Bölüm {currentLevel.id}</Text>
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>Bölüm {currentLevelData.id}</Text>
         </View>
 
-        <View style={styles.scoreContainer}>
-          {savingScore ? (
-            <ActivityIndicator size="small" color="#EAB308" />
-          ) : (
-            <Ionicons name="flash" size={18} color="#EAB308" />
-          )}
+        <View style={styles.scoreBadge}>
+          <Ionicons name="flash" size={16} color="#EAB308" />
           <Text style={styles.scoreText}>{score}</Text>
         </View>
       </View>
 
-      {/* Bulunacak Kelimeler Izgarası */}
-      <View style={styles.puzzleArea}>
-        <Text style={styles.puzzleTitle}>BULUNAN KELİMELER</Text>
+      {/* Bulunan Kelimeler Izgarası */}
+      <View style={styles.wordsContainer}>
+        <Text style={styles.sectionHeader}>BULUNACAK KELİMELER</Text>
         <View style={styles.wordsGrid}>
-          {currentLevel.targetWords.map((word, idx) => {
+          {currentLevelData.targetWords.map((word, idx) => {
             const isFound = foundWords.includes(word);
-            const isHinted = hints.includes(word);
             return (
               <View
                 key={idx}
-                style={[
-                  styles.wordCard,
-                  isFound && styles.wordCardFound,
-                  isHinted && !isFound && styles.wordCardHinted,
-                ]}
+                style={[styles.wordSlot, isFound && styles.wordSlotActive]}
               >
-                <Text
-                  style={[
-                    styles.wordText,
-                    isFound && styles.wordTextFound,
-                    isHinted && !isFound && styles.wordTextHinted,
-                  ]}
-                >
-                  {isFound
-                    ? word
-                    : isHinted
-                    ? word[0] + " • ".repeat(word.length - 1)
-                    : "• ".repeat(word.length).trim()}
+                <Text style={styles.wordSlotText}>
+                  {isFound ? word : "• ".repeat(word.length).trim()}
                 </Text>
               </View>
             );
@@ -180,36 +145,36 @@ export default function OyunEkrani() {
         </View>
       </View>
 
-      {/* Seçilmekte Olan Kelime Göstergesi */}
+      {/* Seçilen Anlık Kelime */}
       <View style={styles.currentWordContainer}>
-        <Text style={styles.currentWordText}>
-          {currentFormedWord || "Harfleri Seçin"}
+        <Text style={styles.currentWordTitle}>
+          {currentWord ? currentWord : "Harfleri Seçin"}
         </Text>
       </View>
 
-      {/* Dairesel Harf Seçim Çarkı */}
-      <View style={styles.wheelWrapper}>
-        <View style={styles.wheel}>
-          {currentLevel.letters.map((letter, index) => {
+      {/* Dairesel Çark Area */}
+      <View style={styles.wheelArea}>
+        <View style={styles.wheelCircle}>
+          {currentLevelData.letters.map((letter, index) => {
             const angle =
-              (index * (2 * Math.PI)) / currentLevel.letters.length - Math.PI / 2;
-            const x = CENTER + RADIUS * Math.cos(angle);
-            const y = CENTER + RADIUS * Math.sin(angle);
-            const isSelected = selectedIndices.includes(index);
+              (index * (360 / currentLevelData.letters.length) - 90) *
+              (Math.PI / 180);
+            const left =
+              WHEEL_SIZE / 2 + RADIUS * Math.cos(angle) - BUTTON_SIZE / 2;
+            const top =
+              WHEEL_SIZE / 2 + RADIUS * Math.sin(angle) - BUTTON_SIZE / 2;
+            const isSelected = selectedIndexes.includes(index);
 
             return (
               <TouchableOpacity
-                key={index}
-                activeOpacity={0.6}
-                onPress={() => handleLetterPress(index)}
+                key={`letter-${index}`}
                 style={[
                   styles.letterButton,
-                  {
-                    left: x - 26,
-                    top: y - 26,
-                  },
+                  { left, top },
                   isSelected && styles.letterButtonSelected,
                 ]}
+                activeOpacity={0.8}
+                onPress={() => handleLetterPress(index)}
               >
                 <Text
                   style={[
@@ -225,29 +190,25 @@ export default function OyunEkrani() {
         </View>
       </View>
 
-      {/* Kontrol ve Aksiyon Butonları */}
-      <View style={styles.actionButtons}>
+      {/* Alt Aksiyon Butonları */}
+      <View style={styles.bottomBar}>
         <TouchableOpacity
-          style={styles.iconButton}
-          onPress={handleClear}
+          style={styles.iconCircleBtn}
           activeOpacity={0.8}
+          onPress={handleShuffle}
         >
           <Ionicons name="refresh" size={22} color="#94A3B8" />
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.submitButton}
-          onPress={handleSubmit}
-          activeOpacity={0.8}
+          style={styles.mainActionBtn}
+          activeOpacity={0.85}
+          onPress={handleCheck}
         >
-          <Text style={styles.submitButtonText}>KONTROL ET</Text>
+          <Text style={styles.mainActionBtnText}>KONTROL ET</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.iconButton}
-          onPress={handleUseHint}
-          activeOpacity={0.8}
-        >
+        <TouchableOpacity style={styles.iconCircleBtn} activeOpacity={0.8}>
           <Ionicons name="bulb-outline" size={22} color="#EAB308" />
         </TouchableOpacity>
       </View>
@@ -259,103 +220,100 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#020617",
-    paddingHorizontal: 20,
-    justifyContent: "space-between",
+    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight || 20 : 0,
+    justify: "space-between",
   },
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justify: "space-between",
     alignItems: "center",
-    marginTop: 15,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
   },
-  levelBadge: {
-    backgroundColor: "#1E293B",
+  badge: {
+    backgroundColor: "#0F172A",
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#334155",
+    borderColor: "#1E293B",
   },
-  levelText: {
+  badgeText: {
     color: "#F8FAFC",
-    fontWeight: "700",
-    fontSize: 14,
+    fontWeight: "800",
+    fontSize: 13,
   },
-  scoreContainer: {
+  scoreBadge: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(234, 179, 8, 0.1)",
+    gap: 6,
+    backgroundColor: "#0F172A",
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    gap: 6,
+    borderWidth: 1,
+    borderColor: "#1E293B",
   },
   scoreText: {
     color: "#EAB308",
-    fontWeight: "800",
+    fontWeight: "900",
     fontSize: 15,
   },
-  puzzleArea: {
-    marginTop: 10,
+  wordsContainer: {
     alignItems: "center",
+    paddingHorizontal: 20,
   },
-  puzzleTitle: {
+  sectionHeader: {
     color: "#64748B",
-    fontSize: 12,
-    fontWeight: "700",
+    fontSize: 11,
+    fontWeight: "800",
     letterSpacing: 1.5,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   wordsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    justifyContent: "center",
-    gap: 10,
+    justify: "center",
+    gap: 8,
   },
-  wordCard: {
+  wordSlot: {
+    minWidth: 70,
+    height: 42,
     backgroundColor: "#0F172A",
+    borderRadius: 12,
+    alignItems: "center",
+    justify: "center",
     borderWidth: 1,
     borderColor: "#1E293B",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
+    paddingHorizontal: 10,
   },
-  wordCardFound: {
-    backgroundColor: "#1E293B",
+  wordSlotActive: {
     borderColor: "#EAB308",
+    backgroundColor: "rgba(234, 179, 8, 0.1)",
   },
-  wordCardHinted: {
-    borderColor: "#38BDF8",
-  },
-  wordText: {
-    color: "#475569",
-    fontWeight: "700",
-    fontSize: 16,
-    letterSpacing: 2,
-  },
-  wordTextFound: {
+  wordSlotText: {
     color: "#EAB308",
-  },
-  wordTextHinted: {
-    color: "#38BDF8",
+    fontWeight: "900",
+    fontSize: 13,
+    letterSpacing: 1,
   },
   currentWordContainer: {
     alignItems: "center",
-    height: 40,
-    justifyContent: "center",
+    height: 36,
+    justify: "center",
   },
-  currentWordText: {
+  currentWordTitle: {
     color: "#F8FAFC",
     fontSize: 22,
-    fontWeight: "800",
-    letterSpacing: 4,
+    fontWeight: "900",
+    letterSpacing: 2,
   },
-  wheelWrapper: {
+  wheelArea: {
     alignItems: "center",
-    justifyContent: "center",
+    justify: "center",
     marginVertical: 10,
   },
-  wheel: {
+  wheelCircle: {
     width: WHEEL_SIZE,
     height: WHEEL_SIZE,
     borderRadius: WHEEL_SIZE / 2,
@@ -366,56 +324,57 @@ const styles = StyleSheet.create({
   },
   letterButton: {
     position: "absolute",
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: "#1E293B",
+    width: BUTTON_SIZE,
+    height: BUTTON_SIZE,
+    borderRadius: BUTTON_SIZE / 2,
+    backgroundColor: "#EAB308",
     alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#334155",
+    justify: "center",
+    elevation: 4,
   },
   letterButtonSelected: {
-    backgroundColor: "#EAB308",
-    borderColor: "#FACC15",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 2,
+    borderColor: "#EAB308",
   },
   letterText: {
-    color: "#F8FAFC",
+    color: "#020617",
     fontSize: 20,
-    fontWeight: "700",
+    fontWeight: "900",
   },
   letterTextSelected: {
     color: "#020617",
   },
-  actionButtons: {
+  bottomBar: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 15,
-    marginBottom: 20,
+    justify: "space-between",
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    gap: 12,
   },
-  iconButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: "#1E293B",
+  iconCircleBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "#0F172A",
     alignItems: "center",
-    justifyContent: "center",
+    justify: "center",
     borderWidth: 1,
-    borderColor: "#334155",
+    borderColor: "#1E293B",
   },
-  submitButton: {
+  mainActionBtn: {
     flex: 1,
-    height: 50,
-    borderRadius: 25,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: "#EAB308",
     alignItems: "center",
-    justifyContent: "center",
+    justify: "center",
   },
-  submitButtonText: {
+  mainActionBtnText: {
     color: "#020617",
-    fontWeight: "800",
     fontSize: 15,
+    fontWeight: "900",
     letterSpacing: 1,
   },
 });

@@ -4,162 +4,184 @@ import {
   Text,
   StyleSheet,
   SafeAreaView,
-  TouchableOpacity,
   ScrollView,
+  TouchableOpacity,
+  Platform,
+  StatusBar,
+  TextInput,
+  Alert,
+  Switch,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-// Örnek Aktivite Matrisi Verisi (Son 4 ay)
-const MONTHS = ["EYLÜL", "EKİM", "KASIM", "ARALIK"];
-const ACTIVITY_GRID = Array.from({ length: 28 }, (_, i) => ({
-  id: i,
-  level: Math.floor(Math.random() * 4), // 0: yok, 1: düşük, 2: orta, 3: yüksek
-}));
-
 export default function ProfilEkrani() {
-  const [activeTab, setActiveTab] = useState("overview");
+  const [playerName, setPlayerName] = useState("Abdullah");
+  const [isEditing, setIsEditing] = useState(false);
+  const [tempName, setTempName] = useState(playerName);
+
+  // Oyun Ayarları Durumu
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [vibrationEnabled, setVibrationEnabled] = useState(true);
+
+  // Oyuncu İstatistikleri (Dinamik/Mock Data)
+  const userStats = {
+    level: 4,
+    currentXP: 750,
+    nextLevelXP: 1000,
+    totalCoins: 1250,
+    highScore: 450,
+    completedLevels: 12,
+    totalWordsFound: 84,
+  };
+
+  const xpProgressPercent = (userStats.currentXP / userStats.nextLevelXP) * 100;
+
+  const handleSaveName = () => {
+    if (tempName.trim().length < 2) {
+      Alert.alert("Hata", "İsim en az 2 karakter olmalıdır.");
+      return;
+    }
+    setPlayerName(tempName.trim());
+    setIsEditing(false);
+    Alert.alert("Başarılı", "Oyuncu adın güncellendi!");
+  };
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {/* Header & Ayarlar Butonu */}
-        <View style={styles.topBar}>
-          <Text style={styles.topBarTitle}>Profil</Text>
-          <TouchableOpacity style={styles.settingsIconBtn} activeOpacity={0.7}>
-            <Ionicons name="settings-outline" size={22} color="#F8FAFC" />
-          </TouchableOpacity>
-        </View>
+      {/* Üst Header */}
+      <View style={styles.header}>
+        <Ionicons name="person" size={24} color="#EAB308" />
+        <Text style={styles.headerTitle}>Oyuncu Profili</Text>
+      </View>
 
-        {/* Profil Kartı & Seviye Rozeti */}
-        <View style={styles.profileHeader}>
-          <View style={styles.avatarWrapper}>
-            <View style={styles.avatarInner}>
-              <Ionicons name="moon" size={36} color="#EAB308" />
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Oyuncu Kartı & Avatar */}
+        <View style={styles.profileCard}>
+          <View style={styles.avatarContainer}>
+            <View style={styles.avatarCircle}>
+              <Text style={styles.avatarText}>
+                {playerName.charAt(0).toUpperCase()}
+              </Text>
             </View>
             <View style={styles.levelBadge}>
-              <Text style={styles.levelBadgeText}>SEVİYE 42</Text>
-            </View>
-          </View>
-          <Text style={styles.userName}>Kelimeler Efendisi</Text>
-          <Text style={styles.userSubtitle}>Gece kuşları kulübü üyesi</Text>
-        </View>
-
-        {/* Metrik Kartı 1: Toplam Puan */}
-        <View style={styles.metricCard}>
-          <View style={styles.metricHeader}>
-            <Ionicons name="star" size={18} color="#EAB308" />
-            <Text style={styles.metricTitle}>TOPLAM PUAN</Text>
-          </View>
-          <Text style={styles.metricMainValue}>128,450</Text>
-          <View style={styles.metricTrend}>
-            <Ionicons name="trending-up" size={14} color="#22C55E" />
-            <Text style={styles.metricTrendText}>Bu hafta +2.4k</Text>
-          </View>
-        </View>
-
-        {/* Metrik Kartı 2: Bulunan Kelime */}
-        <View style={styles.metricCard}>
-          <View style={styles.metricHeader}>
-            <Ionicons name="book-outline" size={18} color="#38BDF8" />
-            <Text style={styles.metricTitle}>BULUNAN KELİME</Text>
-          </View>
-          <Text style={styles.metricMainValue}>3,842</Text>
-          <Text style={styles.metricSubInfo}>En uzun kelime: Muvaffakiyet</Text>
-        </View>
-
-        {/* Metrik Kartı 3: Seri (Streak) */}
-        <View style={styles.metricCard}>
-          <View style={styles.metricHeaderBetween}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Ionicons name="flame" size={18} color="#F97316" />
-              <Text style={styles.metricTitle}>SERİ</Text>
-            </View>
-            <Text style={styles.streakHighlight}>14 GÜN</Text>
-          </View>
-          <View style={styles.streakBarsContainer}>
-            {[40, 65, 30, 80, 50, 100, 70].map((height, idx) => (
-              <View key={idx} style={styles.streakBarTrack}>
-                <View
-                  style={[
-                    styles.streakBarFill,
-                    { height: `${height}%` },
-                    idx === 5 && styles.streakBarActive,
-                  ]}
-                />
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* Aktivite Geçmişi (Matrix Matris) */}
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeaderBetween}>
-            <Text style={styles.sectionTitle}>Aktivite Geçmişi</Text>
-            <View style={styles.legendContainer}>
-              <Text style={styles.legendText}>DÜŞÜK</Text>
-              <View style={[styles.legendBox, { backgroundColor: "#1E293B" }]} />
-              <View style={[styles.legendBox, { backgroundColor: "#334155" }]} />
-              <View style={[styles.legendBox, { backgroundColor: "#0284C7" }]} />
-              <View style={[styles.legendBox, { backgroundColor: "#38BDF8" }]} />
-              <Text style={styles.legendText}>YÜKSEK</Text>
+              <Text style={styles.levelBadgeText}>Lvl {userStats.level}</Text>
             </View>
           </View>
 
-          <View style={styles.matrixGrid}>
-            {ACTIVITY_GRID.map((item) => {
-              let bg = "#1E293B";
-              if (item.level === 1) bg = "#334155";
-              if (item.level === 2) bg = "#0284C7";
-              if (item.level === 3) bg = "#38BDF8";
+          {/* İsim Düzenleme Alanı */}
+          {isEditing ? (
+            <View style={styles.nameEditRow}>
+              <TextInput
+                style={styles.nameInput}
+                value={tempName}
+                onChangeText={setTempName}
+                autoFocus
+                maxLength={15}
+              />
+              <TouchableOpacity
+                style={styles.saveBtn}
+                onPress={handleSaveName}
+              >
+                <Ionicons name="checkmark" size={18} color="#020617" />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.nameRow}
+              onPress={() => {
+                setTempName(playerName);
+                setIsEditing(true);
+              }}
+            >
+              <Text style={styles.playerName}>{playerName}</Text>
+              <Ionicons name="pencil-sharp" size={16} color="#64748B" />
+            </TouchableOpacity>
+          )}
 
-              return (
-                <View
-                  key={item.id}
-                  style={[styles.matrixCell, { backgroundColor: bg }]}
-                />
-              );
-            })}
-          </View>
+          <Text style={styles.playerRole}>Kelime Ustası</Text>
 
-          <View style={styles.monthsRow}>
-            {MONTHS.map((m, idx) => (
-              <Text key={idx} style={styles.monthText}>
-                {m}
+          {/* XP İlerleme Çubuğu */}
+          <View style={styles.xpContainer}>
+            <View style={styles.xpLabelRow}>
+              <Text style={styles.xpLabel}>Seviye İlerlemesi</Text>
+              <Text style={styles.xpValue}>
+                {userStats.currentXP} / {userStats.nextLevelXP} XP
               </Text>
-            ))}
+            </View>
+            <View style={styles.progressBarBackground}>
+              <View
+                style={[
+                  styles.progressBarFill,
+                  { width: `${xpProgressPercent}%` },
+                ]}
+              />
+            </View>
           </View>
         </View>
 
-        {/* Başarımlar (Achievements) */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Başarımlar</Text>
-
-          <View style={styles.achievementsRow}>
-            <View style={styles.achievementItem}>
-              <View style={[styles.badgeCircle, styles.badgeGold]}>
-                <Ionicons name="ribbon" size={24} color="#020617" />
-              </View>
-              <Text style={styles.achievementName}>GECE BEKÇİSİ</Text>
-            </View>
-
-            <View style={styles.achievementItem}>
-              <View style={[styles.badgeCircle, styles.badgeSilver]}>
-                <Ionicons name="compass" size={24} color="#020617" />
-              </View>
-              <Text style={styles.achievementName}>KELİME AVCISI</Text>
-            </View>
-
-            <View style={styles.achievementItem}>
-              <View style={[styles.badgeCircle, styles.badgeLocked]}>
-                <Ionicons name="lock-closed" size={20} color="#64748B" />
-              </View>
-              <Text style={styles.achievementNameLocked}>KİTAP KURDU</Text>
-            </View>
+        {/* İstatistikler Grid */}
+        <Text style={styles.sectionTitle}>İSTATİSTİKLER</Text>
+        <View style={styles.statsGrid}>
+          <View style={styles.statCard}>
+            <Ionicons name="trophy-outline" size={24} color="#EAB308" />
+            <Text style={styles.statValue}>
+              {userStats.highScore.toLocaleString()}
+            </Text>
+            <Text style={styles.statLabel}>En Yüksek Skor</Text>
           </View>
 
-          <TouchableOpacity style={styles.showAllBtn} activeOpacity={0.8}>
-            <Text style={styles.showAllBtnText}>TÜMÜNÜ GÖR</Text>
-          </TouchableOpacity>
+          <View style={styles.statCard}>
+            <Ionicons name="checkmark-circle-outline" size={24} color="#10B981" />
+            <Text style={styles.statValue}>{userStats.completedLevels}</Text>
+            <Text style={styles.statLabel}>Bölüm Tamamlandı</Text>
+          </View>
+
+          <View style={styles.statCard}>
+            <Ionicons name="book-outline" size={24} color="#38BDF8" />
+            <Text style={styles.statValue}>{userStats.totalWordsFound}</Text>
+            <Text style={styles.statLabel}>Bulunan Kelime</Text>
+          </View>
+
+          <View style={styles.statCard}>
+            <Ionicons name="flash-outline" size={24} color="#F59E0B" />
+            <Text style={styles.statValue}>
+              {userStats.totalCoins.toLocaleString()}
+            </Text>
+            <Text style={styles.statLabel}>Toplam Altın</Text>
+          </View>
+        </View>
+
+        {/* Oyun Ayarları */}
+        <Text style={styles.sectionTitle}>OYUN AYARLARI</Text>
+        <View style={styles.settingsGroup}>
+          <View style={styles.settingItem}>
+            <View style={styles.settingLeft}>
+              <Ionicons name="volume-high-outline" size={20} color="#94A3B8" />
+              <Text style={styles.settingText}>Ses Efektleri</Text>
+            </View>
+            <Switch
+              value={soundEnabled}
+              onValueChange={setSoundEnabled}
+              trackColor={{ false: "#1E293B", true: "#EAB308" }}
+              thumbColor={soundEnabled ? "#020617" : "#94A3B8"}
+            />
+          </View>
+
+          <View style={[styles.settingItem, { borderBottomWidth: 0 }]}>
+            <View style={styles.settingLeft}>
+              <Ionicons name="hardware-chip-outline" size={20} color="#94A3B8" />
+              <Text style={styles.settingText}>Titreşim Feedback</Text>
+            </View>
+            <Switch
+              value={vibrationEnabled}
+              onValueChange={setVibrationEnabled}
+              trackColor={{ false: "#1E293B", true: "#EAB308" }}
+              thumbColor={vibrationEnabled ? "#020617" : "#94A3B8"}
+            />
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -169,256 +191,195 @@ export default function ProfilEkrani() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0B1120",
+    backgroundColor: "#020617",
+    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight || 20 : 0,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#1E293B",
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#F8FAFC",
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 30,
+    padding: 20,
+    paddingBottom: 40,
   },
-  topBar: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  profileCard: {
+    backgroundColor: "#0F172A",
+    borderRadius: 24,
+    padding: 20,
     alignItems: "center",
-    marginTop: 15,
-    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#1E293B",
+    marginBottom: 24,
   },
-  topBarTitle: {
-    color: "#F8FAFC",
-    fontSize: 22,
-    fontWeight: "800",
-  },
-  settingsIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#1E293B",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  profileHeader: {
-    alignItems: "center",
-    marginVertical: 15,
-  },
-  avatarWrapper: {
+  avatarContainer: {
     position: "relative",
-    marginBottom: 12,
+    marginBottom: 14,
   },
-  avatarInner: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
+  avatarCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: "#1E293B",
+    alignItems: "center",
+    justify: "center",
     borderWidth: 2,
     borderColor: "#EAB308",
-    alignItems: "center",
-    justifyContent: "center",
+  },
+  avatarText: {
+    color: "#EAB308",
+    fontSize: 32,
+    fontWeight: "900",
   },
   levelBadge: {
     position: "absolute",
-    bottom: -6,
-    alignSelf: "center",
+    bottom: -4,
     backgroundColor: "#EAB308",
-    paddingHorizontal: 12,
-    paddingVertical: 3,
-    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
   },
   levelBadgeText: {
     color: "#020617",
-    fontWeight: "800",
     fontSize: 10,
-    letterSpacing: 0.5,
+    fontWeight: "900",
   },
-  userName: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#F8FAFC",
-  },
-  userSubtitle: {
-    fontSize: 13,
-    color: "#64748B",
-    marginTop: 2,
-  },
-  metricCard: {
-    backgroundColor: "#161F32",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#1E293B",
-  },
-  metricHeader: {
+  nameRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+  },
+  playerName: {
+    color: "#F8FAFC",
+    fontSize: 20,
+    fontWeight: "900",
+  },
+  nameEditRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  nameInput: {
+    backgroundColor: "#1E293B",
+    color: "#F8FAFC",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    fontSize: 16,
+    fontWeight: "700",
+    minWidth: 140,
+    textAlign: "center",
+    borderWidth: 1,
+    borderColor: "#EAB308",
+  },
+  saveBtn: {
+    backgroundColor: "#EAB308",
+    padding: 8,
+    borderRadius: 10,
+  },
+  playerRole: {
+    color: "#64748B",
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 2,
+    marginBottom: 16,
+  },
+  xpContainer: {
+    width: "100%",
+  },
+  xpLabelRow: {
+    flexDirection: "row",
+    justify: "space-between",
+    alignItems: "center",
     marginBottom: 8,
   },
-  metricHeaderBetween: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  metricTitle: {
-    color: "#64748B",
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 1,
-  },
-  metricMainValue: {
-    color: "#EAB308",
-    fontSize: 28,
-    fontWeight: "900",
-    letterSpacing: 0.5,
-  },
-  metricTrend: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginTop: 6,
-  },
-  metricTrendText: {
-    color: "#22C55E",
+  xpLabel: {
+    color: "#94A3B8",
     fontSize: 12,
     fontWeight: "600",
   },
-  metricSubInfo: {
-    color: "#94A3B8",
+  xpValue: {
+    color: "#EAB308",
     fontSize: 12,
-    marginTop: 6,
-  },
-  streakHighlight: {
-    color: "#F8FAFC",
-    fontSize: 16,
     fontWeight: "800",
   },
-  streakBarsContainer: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    height: 50,
-    marginTop: 5,
-  },
-  streakBarTrack: {
-    width: 24,
-    height: "100%",
-    backgroundColor: "#0F172A",
-    borderRadius: 6,
-    justifyContent: "flex-end",
+  progressBarBackground: {
+    height: 8,
+    backgroundColor: "#1E293B",
+    borderRadius: 4,
     overflow: "hidden",
   },
-  streakBarFill: {
-    width: "100%",
-    backgroundColor: "#334155",
-    borderRadius: 6,
-  },
-  streakBarActive: {
-    backgroundColor: "#38BDF8",
-  },
-  sectionCard: {
-    backgroundColor: "#161F32",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#1E293B",
-  },
-  sectionHeaderBetween: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 15,
-  },
-  sectionTitle: {
-    color: "#F8FAFC",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  legendContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  legendText: {
-    color: "#64748B",
-    fontSize: 9,
-    fontWeight: "700",
-  },
-  legendBox: {
-    width: 10,
-    height: 10,
-    borderRadius: 2,
-  },
-  matrixGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-    justifyContent: "space-between",
-  },
-  matrixCell: {
-    width: 18,
-    height: 18,
+  progressBarFill: {
+    height: "100%",
+    backgroundColor: "#EAB308",
     borderRadius: 4,
   },
-  monthsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 12,
-    paddingHorizontal: 5,
-  },
-  monthText: {
+  sectionTitle: {
     color: "#64748B",
-    fontSize: 10,
-    fontWeight: "700",
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 1.5,
+    marginBottom: 12,
   },
-  achievementsRow: {
+  statsGrid: {
     flexDirection: "row",
-    justifyContent: "space-around",
-    marginVertical: 15,
+    flexWrap: "wrap",
+    gap: 12,
+    marginBottom: 24,
   },
-  achievementItem: {
-    alignItems: "center",
-    gap: 8,
-  },
-  badgeCircle: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  badgeGold: {
-    backgroundColor: "#EAB308",
-  },
-  badgeSilver: {
-    backgroundColor: "#94A3B8",
-  },
-  badgeLocked: {
-    backgroundColor: "#1E293B",
-    borderWidth: 1,
-    borderColor: "#334155",
-  },
-  achievementName: {
-    color: "#F8FAFC",
-    fontSize: 10,
-    fontWeight: "700",
-  },
-  achievementNameLocked: {
-    color: "#64748B",
-    fontSize: 10,
-    fontWeight: "700",
-  },
-  showAllBtn: {
+  statCard: {
+    width: "48%",
     backgroundColor: "#0F172A",
-    paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 16,
+    padding: 16,
     alignItems: "center",
     borderWidth: 1,
     borderColor: "#1E293B",
   },
-  showAllBtnText: {
+  statValue: {
+    color: "#F8FAFC",
+    fontSize: 20,
+    fontWeight: "900",
+    marginTop: 8,
+  },
+  statLabel: {
     color: "#64748B",
-    fontWeight: "700",
-    fontSize: 12,
-    letterSpacing: 1,
+    fontSize: 11,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  settingsGroup: {
+    backgroundColor: "#0F172A",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#1E293B",
+    paddingHorizontal: 16,
+  },
+  settingItem: {
+    flexDirection: "row",
+    justify: "space-between",
+    alignItems: "center",
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#1E293B",
+  },
+  settingLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  settingText: {
+    color: "#F8FAFC",
+    fontSize: 14,
+    fontWeight: "600",
   },
 });

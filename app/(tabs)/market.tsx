@@ -1,143 +1,286 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
+  SafeAreaView,
   ScrollView,
-  StatusBar,
+  TouchableOpacity,
+  Alert,
+  Modal,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
+// Market Ürün Tipleri
+interface PowerUpItem {
+  id: string;
+  name: string;
+  description: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  price: number;
+  iconColor: string;
+}
+
+interface CoinPackage {
+  id: string;
+  amount: number;
+  priceTL: string;
+  badge?: string;
+  iconColor: string;
+}
+
+const POWER_UPS: PowerUpItem[] = [
+  {
+    id: "hint_single",
+    name: "Tek Harf İpucu",
+    description: "Bulamadığın kelimelerden rastgele bir harf açar.",
+    icon: "bulb",
+    price: 50,
+    iconColor: "#EAB308",
+  },
+  {
+    id: "shuffle_letters",
+    name: "Harf Karıştırıcı",
+    description: "Çemberdeki harflerin konumunu rastgele değiştirir.",
+    icon: "shuffle",
+    price: 20,
+    iconColor: "#38BDF8",
+  },
+  {
+    id: "bomb_remove",
+    name: "Kelime Bombası",
+    description: "Tablodaki en zor kelimelerden birini direkt açar.",
+    icon: "flame",
+    price: 150,
+    iconColor: "#EF4444",
+  },
+  {
+    id: "extra_time",
+    name: "Ekstra Süre",
+    description: "Zaman karşı yarış modlarında fazladan 30 saniye kazandırır.",
+    icon: "time",
+    price: 80,
+    iconColor: "#10B981",
+  },
+];
+
+const COIN_PACKAGES: CoinPackage[] = [
+  {
+    id: "coin_pack_1",
+    amount: 500,
+    priceTL: "₺29,99",
+    iconColor: "#EAB308",
+  },
+  {
+    id: "coin_pack_2",
+    amount: 1500,
+    priceTL: "₺79,99",
+    badge: "POPÜLER",
+    iconColor: "#F59E0B",
+  },
+  {
+    id: "coin_pack_3",
+    amount: 5000,
+    priceTL: "₺199,99",
+    badge: "%30 AVANTAJ",
+    iconColor: "#EAB308",
+  },
+];
+
 export default function MarketEkrani() {
+  const [userCoins, setUserCoins] = useState(1250);
+  const [selectedItem, setSelectedItem] = useState<PowerUpItem | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+
+  // Güçlendirici Satın Alma İşlemi
+  const handleBuyPowerUp = (item: PowerUpItem) => {
+    setSelectedItem(item);
+    setModalVisible(true);
+  };
+
+  const confirmPurchase = () => {
+    if (!selectedItem) return;
+
+    if (userCoins >= selectedItem.price) {
+      setUserCoins((prev) => prev - selectedItem.price);
+      Alert.alert(
+        "Başarılı! 🎉",
+        `"${selectedItem.name}" envanterine eklendi.`
+      );
+    } else {
+      Alert.alert(
+        "Yetersiz Bakiye ⚠️",
+        "Bu ürünü almak için yeterli altınınız bulunmuyor. Marketten altın paketi alabilirsiniz."
+      );
+    }
+    setModalVisible(false);
+    setSelectedItem(null);
+  };
+
+  // Altın Paketi Satın Alma (In-App Purchase Mock)
+  const handleBuyCoinPack = (pack: CoinPackage) => {
+    Alert.alert(
+      "Ödeme Onayı",
+      `${pack.amount} Altın Paketini (${pack.priceTL}) satın almak istiyor musunuz?`,
+      [
+        { text: "İptal", style: "cancel" },
+        {
+          text: "Satın Al",
+          onPress: () => {
+            setUserCoins((prev) => prev + pack.amount);
+            Alert.alert("Tebrikler!", `${pack.amount} Altın bakiyenize eklendi.`);
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#020617" />
-
-      {/* Header Bar: Başlık ve Altın Bakiyesi */}
+      {/* Üst Bar / Bakiye Alanı */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Market</Text>
+        <Text style={styles.headerTitle}>Oyun Marketi</Text>
         <View style={styles.coinBadge}>
-          <Ionicons name="disc" size={18} color="#EAB308" />
-          <Text style={styles.coinText}>1.240 Altın</Text>
+          <Ionicons name="flash" size={18} color="#EAB308" />
+          <Text style={styles.coinText}>{userCoins.toLocaleString()}</Text>
         </View>
       </View>
 
       <ScrollView
-        showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
       >
-        {/* Öne Çıkan Süper Fırsat Kartı (Gece Paketi) */}
-        <View style={styles.promoCard}>
-          <View style={styles.promoBadge}>
-            <Text style={styles.promoBadgeText}>SÜPER FIRSAT</Text>
+        {/* Banner */}
+        <View style={styles.bannerContainer}>
+          <View style={styles.bannerTextWrapper}>
+            <Text style={styles.bannerTitle}>ÖZEL GÜÇLERLE HIZLAN</Text>
+            <Text style={styles.bannerSub}>
+              Zorlandığın bölümleri ipuçlarıyla kolayca geç!
+            </Text>
           </View>
-
-          <Text style={styles.promoTitle}>Gece Paketi</Text>
-          <Text style={styles.promoSubtitle}>
-            20 İpucu, 10 Roket ve Kış Masalı teması bir arada!
-          </Text>
-
-          <TouchableOpacity style={styles.buyBtn} activeOpacity={0.85}>
-            <Text style={styles.buyBtnText}>₺89,99 Satın Al</Text>
-          </TouchableOpacity>
+          <Ionicons name="sparkles" size={48} color="#EAB308" />
         </View>
 
-        {/* Bölüm 1: İpuçları */}
-        <Text style={styles.sectionTitle}>İpuçları</Text>
-        <View style={styles.gridRow}>
-          {/* Tekli İpucu */}
-          <View style={styles.itemCard}>
-            <View style={styles.itemIconBox}>
-              <Ionicons name="bulb-outline" size={28} color="#38BDF8" />
+        {/* Bölüm 1: Güçlendiriciler */}
+        <Text style={styles.sectionTitle}>GÜÇLENDİRİCİLER & İPUÇLARI</Text>
+        {POWER_UPS.map((item) => (
+          <View key={item.id} style={styles.card}>
+            <View
+              style={[
+                styles.cardIconContainer,
+                { backgroundColor: item.iconColor + "15" },
+              ]}
+            >
+              <Ionicons name={item.icon} size={28} color={item.iconColor} />
             </View>
-            <Text style={styles.itemTitle}>Tekli İpucu</Text>
-            <TouchableOpacity style={styles.priceTag} activeOpacity={0.8}>
-              <Text style={styles.priceText}>50</Text>
-              <Ionicons name="disc" size={14} color="#EAB308" />
-            </TouchableOpacity>
-          </View>
 
-          {/* 5'li Paket */}
-          <View style={styles.itemCard}>
-            <View style={styles.itemIconBox}>
-              <Ionicons name="bulb" size={28} color="#EAB308" />
+            <View style={styles.cardInfo}>
+              <Text style={styles.cardTitle}>{item.name}</Text>
+              <Text style={styles.cardDesc}>{item.description}</Text>
             </View>
-            <Text style={styles.itemTitle}>5'li Paket</Text>
-            <TouchableOpacity style={styles.priceTag} activeOpacity={0.8}>
-              <Text style={styles.priceText}>200</Text>
-              <Ionicons name="disc" size={14} color="#EAB308" />
-            </TouchableOpacity>
-          </View>
-        </View>
 
-        {/* Bölüm 2: Güçlendiriciler */}
-        <Text style={styles.sectionTitle}>Güçlendiriciler</Text>
-        <View style={styles.verticalList}>
-          {/* Karıştır */}
-          <View style={styles.horizontalCard}>
-            <View style={[styles.iconBoxSmall, { backgroundColor: "rgba(34, 197, 94, 0.15)" }]}>
-              <Ionicons name="shuffle" size={22} color="#22C55E" />
-            </View>
-            <View style={styles.cardTextGroup}>
-              <Text style={styles.cardTitle}>Karıştır</Text>
-              <Text style={styles.cardSubtitle}>Harfleri rastgele diz.</Text>
-            </View>
-            <TouchableOpacity style={styles.priceTag} activeOpacity={0.8}>
-              <Text style={styles.priceText}>30</Text>
-              <Ionicons name="disc" size={14} color="#EAB308" />
+            <TouchableOpacity
+              style={styles.buyButton}
+              activeOpacity={0.8}
+              onPress={() => handleBuyPowerUp(item)}
+            >
+              <Ionicons name="flash" size={14} color="#020617" />
+              <Text style={styles.buyButtonText}>{item.price}</Text>
             </TouchableOpacity>
           </View>
+        ))}
 
-          {/* Roket */}
-          <View style={styles.horizontalCard}>
-            <View style={[styles.iconBoxSmall, { backgroundColor: "rgba(239, 68, 68, 0.15)" }]}>
-              <Ionicons name="rocket-outline" size={22} color="#EF4444" />
-            </View>
-            <View style={styles.cardTextGroup}>
-              <Text style={styles.cardTitle}>Roket</Text>
-              <Text style={styles.cardSubtitle}>3 rastgele harfi aç.</Text>
-            </View>
-            <TouchableOpacity style={styles.priceTag} activeOpacity={0.8}>
-              <Text style={styles.priceText}>80</Text>
-              <Ionicons name="disc" size={14} color="#EAB308" />
-            </TouchableOpacity>
-          </View>
-        </View>
+        {/* Bölüm 2: Altın Paketleri */}
+        <Text style={[styles.sectionTitle, { marginTop: 25 }]}>
+          ALTIN PAKETLERİ
+        </Text>
+        <View style={styles.coinPacksRow}>
+          {COIN_PACKAGES.map((pack) => (
+            <View key={pack.id} style={styles.coinPackCard}>
+              {pack.badge && (
+                <View style={styles.packBadge}>
+                  <Text style={styles.packBadgeText}>{pack.badge}</Text>
+                </View>
+              )}
+              <Ionicons
+                name="flash"
+                size={36}
+                color={pack.iconColor}
+                style={{ marginTop: 8 }}
+              />
+              <Text style={styles.coinPackAmount}>
+                {pack.amount.toLocaleString()}
+              </Text>
+              <Text style={styles.coinPackLabel}>ALTIN</Text>
 
-        {/* Bölüm 3: Özel Temalar */}
-        <Text style={styles.sectionTitle}>Özel Temalar</Text>
-        <View style={styles.verticalList}>
-          <View style={styles.horizontalCard}>
-            <View style={[styles.iconBoxSmall, { backgroundColor: "rgba(234, 179, 8, 0.15)" }]}>
-              <Ionicons name="leaf-outline" size={22} color="#EAB308" />
+              <TouchableOpacity
+                style={styles.coinBuyBtn}
+                activeOpacity={0.8}
+                onPress={() => handleBuyCoinPack(pack)}
+              >
+                <Text style={styles.coinBuyBtnText}>{pack.priceTL}</Text>
+              </TouchableOpacity>
             </View>
-            <View style={styles.cardTextGroup}>
-              <Text style={styles.cardTitle}>Sonbahar Rüzgarı</Text>
-              <Text style={styles.cardSubtitle}>Sıcak tonlar ve düşen yapraklar.</Text>
-            </View>
-            <TouchableOpacity style={styles.priceTag} activeOpacity={0.8}>
-              <Text style={styles.priceText}>400</Text>
-              <Ionicons name="disc" size={14} color="#EAB308" />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.horizontalCard}>
-            <View style={[styles.iconBoxSmall, { backgroundColor: "rgba(56, 189, 248, 0.15)" }]}>
-              <Ionicons name="snow-outline" size={22} color="#38BDF8" />
-            </View>
-            <View style={styles.cardTextGroup}>
-              <Text style={styles.cardTitle}>Kış Masalı</Text>
-              <Text style={styles.cardSubtitle}>Kar taneleri ve huzurlu sessizlik.</Text>
-            </View>
-            <TouchableOpacity style={styles.priceTag} activeOpacity={0.8}>
-              <Text style={styles.priceText}>600</Text>
-              <Ionicons name="disc" size={14} color="#EAB308" />
-            </TouchableOpacity>
-          </View>
+          ))}
         </View>
       </ScrollView>
+
+      {/* Satın Alma Onay Modalı */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {selectedItem && (
+              <>
+                <View
+                  style={[
+                    styles.modalIconBox,
+                    { backgroundColor: selectedItem.iconColor + "20" },
+                  ]}
+                >
+                  <Ionicons
+                    name={selectedItem.icon}
+                    size={40}
+                    color={selectedItem.iconColor}
+                  />
+                </View>
+                <Text style={styles.modalTitle}>{selectedItem.name}</Text>
+                <Text style={styles.modalDesc}>{selectedItem.description}</Text>
+
+                <View style={styles.modalPriceRow}>
+                  <Text style={styles.modalPriceLabel}>Fiyat:</Text>
+                  <View style={styles.modalPriceBadge}>
+                    <Ionicons name="flash" size={16} color="#EAB308" />
+                    <Text style={styles.modalPriceText}>
+                      {selectedItem.price} Altın
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.modalActionRow}>
+                  <TouchableOpacity
+                    style={styles.modalCancelBtn}
+                    onPress={() => setModalVisible(false)}
+                  >
+                    <Text style={styles.modalCancelText}>İptal</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.modalConfirmBtn}
+                    onPress={confirmPurchase}
+                  >
+                    <Text style={styles.modalConfirmText}>Satın Al</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -149,161 +292,259 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justify: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
-    marginTop: 15,
-    marginBottom: 15,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#1E293B",
   },
   headerTitle: {
-    color: "#F8FAFC",
     fontSize: 22,
-    fontWeight: "800",
+    fontWeight: "900",
+    color: "#F8FAFC",
   },
   coinBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    backgroundColor: "#0F172A",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    backgroundColor: "#1E293B",
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 20,
+    gap: 6,
     borderWidth: 1,
-    borderColor: "#1E293B",
+    borderColor: "#334155",
   },
   coinText: {
     color: "#EAB308",
     fontWeight: "800",
-    fontSize: 13,
+    fontSize: 15,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 30,
-  },
-  promoCard: {
-    backgroundColor: "#0F172A",
-    borderRadius: 20,
     padding: 20,
-    borderWidth: 1,
-    borderColor: "#EAB308",
-    marginBottom: 24,
+    paddingBottom: 40,
   },
-  promoBadge: {
-    backgroundColor: "#EAB308",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    alignSelf: "flex-start",
-    marginBottom: 10,
-  },
-  promoBadgeText: {
-    color: "#020617",
-    fontSize: 10,
-    fontWeight: "900",
-  },
-  promoTitle: {
-    color: "#F8FAFC",
-    fontSize: 20,
-    fontWeight: "800",
-    marginBottom: 4,
-  },
-  promoSubtitle: {
-    color: "#94A3B8",
-    fontSize: 13,
-    marginBottom: 16,
-  },
-  buyBtn: {
-    backgroundColor: "#EAB308",
-    paddingVertical: 12,
-    borderRadius: 12,
+  bannerContainer: {
+    backgroundColor: "#0F172A",
+    borderRadius: 18,
+    padding: 20,
+    flexDirection: "row",
     alignItems: "center",
+    justify: "space-between",
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#1E293B",
   },
-  buyBtnText: {
-    color: "#020617",
-    fontWeight: "800",
-    fontSize: 14,
+  bannerTextWrapper: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  bannerTitle: {
+    color: "#F8FAFC",
+    fontWeight: "900",
+    fontSize: 16,
+    letterSpacing: 0.5,
+  },
+  bannerSub: {
+    color: "#94A3B8",
+    fontSize: 12,
+    marginTop: 4,
   },
   sectionTitle: {
-    color: "#F8FAFC",
-    fontSize: 18,
+    color: "#64748B",
+    fontSize: 12,
     fontWeight: "800",
+    letterSpacing: 1.5,
     marginBottom: 12,
-    marginTop: 8,
   },
-  gridRow: {
+  card: {
     flexDirection: "row",
-    gap: 12,
-    marginBottom: 20,
-  },
-  itemCard: {
-    flex: 1,
+    alignItems: "center",
     backgroundColor: "#0F172A",
     borderRadius: 16,
     padding: 16,
-    alignItems: "center",
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: "#1E293B",
   },
-  itemIconBox: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: "#1E293B",
+  cardIconContainer: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
     alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 10,
+    justify: "center",
+    marginRight: 14,
   },
-  itemTitle: {
-    color: "#F8FAFC",
-    fontSize: 14,
-    fontWeight: "700",
-    marginBottom: 10,
-  },
-  verticalList: {
-    gap: 12,
-    marginBottom: 20,
-  },
-  horizontalCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#0F172A",
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#1E293B",
-    gap: 12,
-  },
-  iconBoxSmall: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  cardTextGroup: {
+  cardInfo: {
     flex: 1,
   },
   cardTitle: {
     color: "#F8FAFC",
-    fontSize: 15,
     fontWeight: "700",
+    fontSize: 16,
   },
-  cardSubtitle: {
-    color: "#64748B",
+  cardDesc: {
+    color: "#94A3B8",
     fontSize: 12,
+    marginTop: 3,
+    lineHeight: 16,
   },
-  priceTag: {
+  buyButton: {
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#EAB308",
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 20,
     gap: 4,
+  },
+  buyButtonText: {
+    color: "#020617",
+    fontWeight: "900",
+    fontSize: 14,
+  },
+  coinPacksRow: {
+    flexDirection: "row",
+    justify: "space-between",
+    gap: 10,
+  },
+  coinPackCard: {
+    flex: 1,
+    backgroundColor: "#0F172A",
+    borderRadius: 16,
+    padding: 14,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#1E293B",
+    position: "relative",
+  },
+  packBadge: {
+    position: "absolute",
+    top: -10,
+    backgroundColor: "#EAB308",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  packBadgeText: {
+    color: "#020617",
+    fontSize: 9,
+    fontWeight: "900",
+  },
+  coinPackAmount: {
+    color: "#F8FAFC",
+    fontWeight: "900",
+    fontSize: 18,
+    marginTop: 8,
+  },
+  coinPackLabel: {
+    color: "#64748B",
+    fontSize: 10,
+    fontWeight: "800",
+    marginBottom: 12,
+  },
+  coinBuyBtn: {
+    backgroundColor: "#1E293B",
+    width: "100%",
+    paddingVertical: 8,
+    borderRadius: 12,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#334155",
+  },
+  coinBuyBtnText: {
+    color: "#38BDF8",
+    fontWeight: "800",
+    fontSize: 13,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(2, 6, 23, 0.85)",
+    justify: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  modalContent: {
+    width: "100%",
+    backgroundColor: "#0F172A",
+    borderRadius: 24,
+    padding: 24,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#1E293B",
+  },
+  modalIconBox: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    alignItems: "center",
+    justify: "center",
+    marginBottom: 16,
+  },
+  modalTitle: {
+    color: "#F8FAFC",
+    fontSize: 20,
+    fontWeight: "900",
+    marginBottom: 6,
+  },
+  modalDesc: {
+    color: "#94A3B8",
+    fontSize: 14,
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  modalPriceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 24,
+  },
+  modalPriceLabel: {
+    color: "#64748B",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  modalPriceBadge: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "#1E293B",
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 12,
+    borderRadius: 16,
+    gap: 6,
   },
-  priceText: {
+  modalPriceText: {
+    color: "#EAB308",
+    fontWeight: "800",
+    fontSize: 14,
+  },
+  modalActionRow: {
+    flexDirection: "row",
+    gap: 12,
+    width: "100%",
+  },
+  modalCancelBtn: {
+    flex: 1,
+    backgroundColor: "#1E293B",
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#334155",
+  },
+  modalCancelText: {
     color: "#F8FAFC",
     fontWeight: "800",
-    fontSize: 13,
+  },
+  modalConfirmBtn: {
+    flex: 1,
+    backgroundColor: "#EAB308",
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: "center",
+  },
+  modalConfirmText: {
+    color: "#020617",
+    fontWeight: "900",
   },
 });

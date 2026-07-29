@@ -1,92 +1,187 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
-  TouchableOpacity,
   StyleSheet,
-  Image,
-  Dimensions,
+  SafeAreaView,
+  TouchableOpacity,
+  ScrollView,
+  Platform,
   StatusBar,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 
-// Cihaz ekran genişliği
-const { width } = Dimensions.get("window");
+// Firebase Firestore Bağlantısı
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { db } from "../../firebaseConfig";
+
+interface UserProfile {
+  username: string;
+  coins: number;
+  currentLevel: number;
+}
 
 export default function AnaMenuEkrani() {
+  const router = useRouter();
+
+  const [profile, setProfile] = useState<UserProfile>({
+    username: "Abdullah",
+    coins: 1250,
+    currentLevel: 25,
+  });
+  const [loading, setLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    const userDocRef = doc(db, "users", "demo_user_id");
+
+    // Canlı Veri Dinleyicisi
+    const unsubscribe = onSnapshot(
+      userDocRef,
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setProfile({
+            username: data.username || "Abdullah",
+            coins: data.coins ?? 1250,
+            currentLevel: data.currentLevel ?? 25,
+          });
+        } else {
+          // Doküman yoksa varsayılan veriyi Firestore'a ilk kez yaz
+          setDoc(userDocRef, {
+            username: "Abdullah",
+            coins: 1250,
+            currentLevel: 25,
+          });
+        }
+        setLoading(false);
+      },
+      (error) => {
+        console.log("Firestore Dinleme Hatası:", error);
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* React Native Öz (Native) StatusBar Kullanımı */}
-      <StatusBar barStyle="light-content" backgroundColor="#020617" />
-
-      {/* Üst Bilgi Barı */}
+      {/* Üst Header: Profil Özeti */}
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={styles.profileBadge}>
-            <Image
-              source={{ uri: "https://via.placeholder.com/40" }}
-              style={styles.profileImage}
-            />
-          </View>
-          <View style={styles.welcomeTextContainer}>
-            <Text style={styles.welcomeSubtitle}>Hoş Geldiniz</Text>
-            <Text style={styles.welcomeTitle}>Uysal Kelimeler</Text>
-          </View>
+        <View style={styles.userGreeting}>
+          <Text style={styles.greetingSub}>HOŞ GELDİN</Text>
+          <Text style={styles.greetingName}>{profile.username} 👋</Text>
         </View>
-        <TouchableOpacity style={styles.scoreBadge} activeOpacity={0.8}>
+
+        <View style={styles.coinBadge}>
           <Ionicons name="flash" size={18} color="#EAB308" />
-          <Text style={styles.scoreText}>1,250</Text>
-        </TouchableOpacity>
+          <Text style={styles.coinText}>
+            {loading ? "..." : profile.coins.toLocaleString()}
+          </Text>
+        </View>
       </View>
 
-      {/* Ana Orta Alan (Stitch İlhamlı Görsel) */}
-      <View style={styles.mainContent}>
-        <View style={styles.logoWrapper}>
-          <View style={styles.logoCircle}>
-            <Ionicons name="book" size={80} color="#EAB308" />
-          </View>
-          {/* Logo altı parlama efekti */}
-          <View style={styles.logoGlow} />
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Ana Hero Başlığı */}
+        <View style={styles.heroSection}>
+          <Text style={styles.heroTitle}>Zihnini dinlendirirken geliştir.</Text>
+          <Text style={styles.heroSubtitle}>
+            Hangi oyun modunda kelimelerini konuşturmak istersin?
+          </Text>
         </View>
 
-        <Text style={styles.title}>Uysal Kelimeler</Text>
-        <Text style={styles.description}>
-          Gecenin sessizliğinde zihnini dinlendir, kelimelerin huzuruna yolculuk et.
-        </Text>
-      </View>
-
-      {/* Oyuna Başla Butonu */}
-      <TouchableOpacity style={styles.startButton} activeOpacity={0.9}>
-        <Ionicons name="play" size={24} color="#020617" style={{ marginRight: 8 }} />
-        <Text style={styles.startButtonText}>Oyuna Başla</Text>
-      </TouchableOpacity>
-
-      {/* Aile Skor Tablosu Ön İzleme Kartı */}
-      <View style={styles.scorePreviewCard}>
-        <View style={styles.cardHeader}>
-          <Ionicons name="people" size={20} color="#EAB308" />
-          <Text style={styles.cardTitle}>Aile Skor Tablosu</Text>
-          <Ionicons name="chevron-forward" size={18} color="#475569" style={{ marginLeft: "auto" }} />
-        </View>
-
-        {/* Skor Listesi */}
-        <View style={styles.cardBody}>
-          {[
-            { rank: 1, name: "Zeynep", score: 1240 },
-            { rank: 2, name: "Can", score: 980 },
-            { rank: 3, name: "Elif", score: 850 },
-          ].map((user, idx) => (
-            <View key={idx} style={styles.scoreRow}>
-              <Text style={[styles.scoreRank, user.rank === 1 && { color: "#EAB308" }]}>
-                {user.rank}
-              </Text>
-              <Text style={styles.scoreName}>{user.name}</Text>
-              <Text style={styles.scoreValue}>{user.score} p</Text>
+        {/* Hızlı Oyuna Başla (Büyük Karşılama Kartı) */}
+        <TouchableOpacity
+          style={styles.playCard}
+          activeOpacity={0.88}
+          onPress={() => router.push("/(tabs)/oyun")}
+        >
+          <View style={styles.playCardContent}>
+            <View style={styles.playBadge}>
+              <Text style={styles.playBadgeText}>Maceraya Devam Et</Text>
             </View>
-          ))}
+            <Text style={styles.playCardTitle}>
+              Bölüm {profile.currentLevel}
+            </Text>
+            <Text style={styles.playCardSub}>
+              Kaldığın yerden hemen oynamaya başla!
+            </Text>
+
+            <View style={styles.playCardBtn}>
+              <Text style={styles.playCardBtnText}>OYUNA BAŞLA</Text>
+              <Ionicons name="arrow-forward" size={18} color="#020617" />
+            </View>
+          </View>
+          <Ionicons
+            name="game-controller-sharp"
+            size={100}
+            color="rgba(234, 179, 8, 0.15)"
+            style={styles.cardBgIcon}
+          />
+        </TouchableOpacity>
+
+        {/* Günlük Mücadele Banner */}
+        <View style={styles.dailyCard}>
+          <View style={styles.dailyHeader}>
+            <Ionicons name="sparkles" size={20} color="#EAB308" />
+            <Text style={styles.dailyBadgeText}>GÜNLÜK MÜCADELE</Text>
+          </View>
+          <Text style={styles.dailyTitle}>Yıldızların Altında Kelimeler</Text>
+          <Text style={styles.dailySub}>
+            Bugünkü özel ödülü ve ekstra altını kazanmak için hemen katıl.
+          </Text>
+
+          <TouchableOpacity
+            style={styles.dailyBtn}
+            activeOpacity={0.85}
+            onPress={() => router.push("/(tabs)/oyun")}
+          >
+            <Text style={styles.dailyBtnText}>Katıl</Text>
+            <Ionicons name="arrow-forward" size={16} color="#020617" />
+          </TouchableOpacity>
         </View>
-      </View>
+
+        {/* Hızlı Erişim Menü Kartları */}
+        <View style={styles.gridContainer}>
+          <TouchableOpacity
+            style={styles.gridCard}
+            activeOpacity={0.8}
+            onPress={() => router.push("/(tabs)/modlar")}
+          >
+            <View
+              style={[
+                styles.gridIconBox,
+                { backgroundColor: "rgba(56, 189, 248, 0.15)" },
+              ]}
+            >
+              <Ionicons name="apps-sharp" size={24} color="#38BDF8" />
+            </View>
+            <Text style={styles.gridCardTitle}>Oyun Modları</Text>
+            <Text style={styles.gridCardSub}>Zamana karşı & Zen</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.gridCard}
+            activeOpacity={0.8}
+            onPress={() => router.push("/(tabs)/skor")}
+          >
+            <View
+              style={[
+                styles.gridIconBox,
+                { backgroundColor: "rgba(234, 179, 8, 0.15)" },
+              ]}
+            >
+              <Ionicons name="trophy-sharp" size={24} color="#EAB308" />
+            </View>
+            <Text style={styles.gridCardTitle}>Liderlik</Text>
+            <Text style={styles.gridCardSub}>En yüksek skorlar</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -95,179 +190,196 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#020617",
-    paddingHorizontal: 20,
-    justifyContent: "space-between",
+    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight || 20 : 0,
   },
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
+    justify: "space-between",
     alignItems: "center",
-    marginTop: 15,
+    paddingHorizontal: 20,
+    paddingVertical: 15,
   },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
+  userGreeting: {
+    gap: 2,
   },
-  profileBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#1E293B",
-    borderWidth: 2,
-    borderColor: "#EAB308",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  profileImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  welcomeTextContainer: {
-    justifyContent: "center",
-  },
-  welcomeSubtitle: {
+  greetingSub: {
     color: "#64748B",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  welcomeTitle: {
-    color: "#F8FAFC",
-    fontSize: 18,
+    fontSize: 11,
     fontWeight: "800",
+    letterSpacing: 1,
   },
-  scoreBadge: {
+  greetingName: {
+    color: "#F8FAFC",
+    fontSize: 20,
+    fontWeight: "900",
+  },
+  coinBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "rgba(234, 179, 8, 0.1)",
+    backgroundColor: "#0F172A",
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderRadius: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  scoreText: {
-    color: "#EAB308",
-    fontWeight: "800",
-    fontSize: 15,
-  },
-  mainContent: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    marginVertical: 30,
-  },
-  logoWrapper: {
-    position: "relative",
-    marginBottom: 20,
-  },
-  logoCircle: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: "#0F172A",
-    borderWidth: 3,
-    borderColor: "#1E293B",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  logoGlow: {
-    position: "absolute",
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: "rgba(234, 179, 8, 0.3)",
-    transform: [{ scale: 1.15 }],
-    opacity: 0.4,
-    zIndex: -1,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: "900",
-    color: "#F8FAFC",
-    marginBottom: 8,
-  },
-  description: {
-    color: "#64748B",
-    fontSize: 14,
-    fontWeight: "600",
-    textAlign: "center",
-    lineHeight: 22,
-    paddingHorizontal: width * 0.1,
-  },
-  startButton: {
-    flexDirection: "row",
-    backgroundColor: "#EAB308",
-    paddingVertical: 18,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 20,
-    shadowColor: "#FACC15",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 6,
-    elevation: 8,
-  },
-  startButtonText: {
-    color: "#020617",
-    fontWeight: "800",
-    fontSize: 18,
-  },
-  scorePreviewCard: {
-    backgroundColor: "#0F172A",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
     borderWidth: 1,
     borderColor: "#1E293B",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 4,
   },
-  cardHeader: {
+  coinText: {
+    color: "#EAB308",
+    fontWeight: "900",
+    fontSize: 14,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+  },
+  heroSection: {
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  heroTitle: {
+    color: "#F8FAFC",
+    fontSize: 24,
+    fontWeight: "900",
+    lineHeight: 32,
+    marginBottom: 6,
+  },
+  heroSubtitle: {
+    color: "#94A3B8",
+    fontSize: 14,
+  },
+  playCard: {
+    backgroundColor: "#0F172A",
+    borderRadius: 24,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "#EAB308",
+    marginBottom: 20,
+    position: "relative",
+    overflow: "hidden",
+  },
+  playCardContent: {
+    zIndex: 2,
+  },
+  playBadge: {
+    backgroundColor: "rgba(234, 179, 8, 0.15)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    alignSelf: "flex-start",
+    marginBottom: 10,
+  },
+  playBadgeText: {
+    color: "#EAB308",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  playCardTitle: {
+    color: "#F8FAFC",
+    fontSize: 24,
+    fontWeight: "900",
+  },
+  playCardSub: {
+    color: "#94A3B8",
+    fontSize: 13,
+    marginTop: 4,
+    marginBottom: 16,
+  },
+  playCardBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#1E293B",
-    paddingBottom: 12,
-    marginBottom: 12,
+    backgroundColor: "#EAB308",
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignSelf: "flex-start",
   },
-  cardTitle: {
-    color: "#F8FAFC",
+  playCardBtnText: {
+    color: "#020617",
+    fontWeight: "900",
     fontSize: 14,
-    fontWeight: "700",
   },
-  cardBody: {
-    gap: 10,
+  cardBgIcon: {
+    position: "absolute",
+    right: -10,
+    bottom: -10,
+    zIndex: 1,
   },
-  scoreRow: {
+  dailyCard: {
+    backgroundColor: "#0F172A",
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "#1E293B",
+    marginBottom: 20,
+  },
+  dailyHeader: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: 6,
+    marginBottom: 8,
   },
-  scoreRank: {
-    color: "#64748B",
-    fontWeight: "700",
-    fontSize: 14,
-    width: 20,
+  dailyBadgeText: {
+    color: "#EAB308",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 1,
   },
-  scoreName: {
+  dailyTitle: {
     color: "#F8FAFC",
-    fontWeight: "600",
-    fontSize: 15,
+    fontSize: 18,
+    fontWeight: "800",
+    marginBottom: 4,
   },
-  scoreValue: {
-    color: "#94A3B8",
-    fontWeight: "700",
+  dailySub: {
+    color: "#64748B",
     fontSize: 13,
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  dailyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justify: "center",
+    gap: 6,
+    backgroundColor: "#EAB308",
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  dailyBtnText: {
+    color: "#020617",
+    fontWeight: "800",
+    fontSize: 14,
+  },
+  gridContainer: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  gridCard: {
+    flex: 1,
+    backgroundColor: "#0F172A",
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#1E293B",
+  },
+  gridIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justify: "center",
+    marginBottom: 12,
+  },
+  gridCardTitle: {
+    color: "#F8FAFC",
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  gridCardSub: {
+    color: "#64748B",
+    fontSize: 12,
+    marginTop: 2,
   },
 });

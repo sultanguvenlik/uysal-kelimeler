@@ -1,108 +1,124 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   SafeAreaView,
   FlatList,
-  TouchableOpacity,
   ActivityIndicator,
+  RefreshControl,
+  Platform,
+  StatusBar,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { db } from "../../firebaseConfig";
-import { collection, query, orderBy, limit, onSnapshot } from "firebase/firestore";
+import {
+  collection,
+  query,
+  orderBy,
+  limit,
+  onSnapshot,
+} from "firebase/firestore";
 
-interface LeaderboardUser {
+interface ScoreItem {
   id: string;
-  rank: number;
   name: string;
   score: number;
-  isCurrentUser?: boolean;
+  level: number;
 }
 
 export default function SkorEkrani() {
-  const [filter, setFilter] = useState<"haftalik" | "genel">("haftalik");
-  const [leaderboardData, setLeaderboardData] = useState<LeaderboardUser[]>([]);
+  const [scores, setScores] = useState<ScoreItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    setLoading(true);
-
-    // Firestore Realtime Listener (Canlı Veri Dinleyici)
-    // "scores" koleksiyonundan skora göre büyükten küçüğe ilk 20 kişiyi çeker
-    const scoresRef = collection(db, "scores");
-    const q = query(scoresRef, orderBy("score", "desc"), limit(20));
+    // Firestore'dan skorları çekiyoruz
+    const q = query(
+      collection(db, "scores"),
+      orderBy("score", "desc"),
+      limit(50) // Her kullanıcının en yüksek skorunu süzebilmek için havuzu geniş tutuyoruz
+    );
 
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const users: LeaderboardUser[] = snapshot.docs.map((doc, index) => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            rank: index + 1,
-            name: data.name || "İsimsiz Oyuncu",
-            score: data.score || 0,
-            isCurrentUser: data.name === "Abdullah", // Test amaçlı
-          };
-        });
+        const rawScores: ScoreItem[] = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          name: doc.data().name || "Gizli Oyuncu",
+          score: doc.data().score || 0,
+          level: doc.data().level || 1,
+        }));
 
-        setLeaderboardData(users);
+        // Mükerrer Kayıt Engelleme: Her oyuncunun SADECE en yüksek skorunu filtreliyoruz
+        const uniqueScoresMap = rawScores.reduce<Record<string, ScoreItem>>((acc, item) => {
+          if (!acc[item.name] || acc[item.name].score < item.score) {
+            acc[item.name] = item;
+          }
+          return acc;
+        }, {});
+
+        // Objeden diziye çevirip skora göre tekrar sıralıyoruz ve İlk 10'u alıyoruz
+        const sortedUniqueScores = Object.values(uniqueScoresMap)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 10);
+
+        setScores(sortedUniqueScores);
         setLoading(false);
+        setRefreshing(false);
       },
       (error) => {
-        console.log("Firebase Veri Çekme Hatası:", error);
+        console.error("Firestore skor çekme hatası:", error);
         setLoading(false);
+        setRefreshing(false);
       }
     );
 
-    // Component unmount olduğunda dinleyiciyi kapatır (Memory Leak önleme)
     return () => unsubscribe();
-  }, [filter]);
+  }, []);
 
-  const renderItem = ({ item }: { item: LeaderboardUser }) => {
-    let rankColor = "#64748B";
-    let badgeIcon = null;
-
-    if (item.rank === 1) {
-      rankColor = "#EAB308";
-      badgeIcon = "trophy";
-    } else if (item.rank === 2) {
-      rankColor = "#94A3B8";
-      badgeIcon = "medal";
-    } else if (item.rank === 3) {
-      rankColor = "#B45309";
-      badgeIcon = "ribbon";
+  const getRankBadgeColor = (index: number) => {
+    switch (index) {
+      case 0:
+        return "#EAB308"; // 1. Altın
+      case 1:
+        return "#94A3B8"; // 2. Gümüş
+      case 2:
+        return "#B45309"; // 3. Bronz
+      default:
+        return "#1E293B"; // Diğerleri
     }
+  };
+
+  const renderScoreCard = ({ item, index }: { item: ScoreItem; index: number }) => {
+    const isTopThree = index < 3;
+    const badgeColor = getRankBadgeColor(index);
 
     return (
-      <View
-        style={[
-          styles.rankCard,
-          item.isCurrentUser && styles.currentUserRankCard,
-        ]}
-      >
-        <View style={styles.rankLeft}>
-          <View style={styles.rankBadge}>
-            {badgeIcon ? (
-              <Ionicons name={badgeIcon as any} size={20} color={rankColor} />
-            ) : (
-              <Text style={styles.rankNumberText}>{item.rank}</Text>
-            )}
-          </View>
-          <Text
-            style={[
-              styles.userNameText,
-              item.isCurrentUser && styles.currentUserNameText,
-            ]}
-          >
-            {item.name} {item.isCurrentUser && "(Siz)"}
-          </Text>
+      <View style={[styles.card, isTopThree && styles.cardTopThree]}>
+        <View style={[styles.rankBadge, { backgroundColor: badgeColor }]}>
+          {index === 0 ? (
+            <Ionicons name="trophy" size={16} color="#020617" />
+          ) : (
+            <Text
+              style={[
+                styles.rankBadgeText,
+                isTopThree && { color: "#020617" },
+              ]}
+            >
+              #{index + 1}
+            </Text>
+          )}
         </View>
 
-        <View style={styles.scoreBadge}>
-          <Ionicons name="flash" size={14} color="#EAB308" />
-          <Text style={styles.scoreValueText}>{item.score}</Text>
+        <View style={styles.playerInfo}>
+          <Text style={styles.playerName}>{item.name}</Text>
+          <Text style={styles.playerLevel}>Bölüm {item.level}</Text>
+        </View>
+
+        <View style={styles.scoreContainer}>
+          <Ionicons name="flash" size={16} color="#EAB308" />
+          <Text style={styles.scoreText}>{item.score.toLocaleString()}</Text>
         </View>
       </View>
     );
@@ -110,65 +126,39 @@ export default function SkorEkrani() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
+      {/* Üst Header - Android StatusBar Çakışması Engellendi */}
       <View style={styles.header}>
+        <Ionicons name="trophy" size={24} color="#EAB308" />
         <Text style={styles.headerTitle}>Liderlik Tablosu</Text>
-        <Text style={styles.headerSubtitle}>En yüksek skora sahip oyuncular</Text>
       </View>
 
-      {/* Tab Filtreleri */}
-      <View style={styles.filterContainer}>
-        <TouchableOpacity
-          style={[
-            styles.filterButton,
-            filter === "haftalik" && styles.filterButtonActive,
-          ]}
-          onPress={() => setFilter("haftalik")}
-          activeOpacity={0.8}
-        >
-          <Text
-            style={[
-              styles.filterText,
-              filter === "haftalik" && styles.filterTextActive,
-            ]}
-          >
-            Haftalık
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.filterButton,
-            filter === "genel" && styles.filterButtonActive,
-          ]}
-          onPress={() => setFilter("genel")}
-          activeOpacity={0.8}
-        >
-          <Text
-            style={[
-              styles.filterText,
-              filter === "genel" && styles.filterTextActive,
-            ]}
-          >
-            Tüm Zamanlar
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Yükleniyor Göstergesi veya Liste */}
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#EAB308" />
+          <Text style={styles.loadingText}>Skorlar Yükleniyor...</Text>
         </View>
       ) : (
         <FlatList
-          data={leaderboardData}
+          data={scores}
           keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          contentContainerStyle={styles.listContainer}
+          renderItem={renderScoreCard}
+          contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => setRefreshing(true)}
+              tintColor="#EAB308"
+            />
+          }
           ListEmptyComponent={
-            <Text style={styles.emptyText}>Henüz kayıtlı skor bulunmuyor.</Text>
+            <View style={styles.emptyContainer}>
+              <Ionicons name="podium-outline" size={48} color="#475569" />
+              <Text style={styles.emptyText}>Henüz kayıtlı skor yok.</Text>
+              <Text style={styles.emptySubText}>
+                İlk skoru sen kaydetmek için oyunu oyna!
+              </Text>
+            </View>
           }
         />
       )}
@@ -180,117 +170,108 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#020617",
-    paddingHorizontal: 20,
+    // Android cihazlarda üst çentik/sistem çubuğu taşmasını önler
+    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight || 20 : 0,
   },
   header: {
-    marginTop: 20,
-    marginBottom: 15,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#1E293B",
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: "800",
+    fontSize: 22,
+    fontWeight: "900",
     color: "#F8FAFC",
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: "#64748B",
-    marginTop: 4,
-  },
-  filterContainer: {
-    flexDirection: "row",
-    backgroundColor: "#0F172A",
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: "#1E293B",
-  },
-  filterButton: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: "center",
-    borderRadius: 8,
-  },
-  filterButtonActive: {
-    backgroundColor: "#1E293B",
-  },
-  filterText: {
-    color: "#64748B",
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  filterTextActive: {
-    color: "#EAB308",
-    fontWeight: "700",
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: "center",
+    justify: "center",
     alignItems: "center",
+    gap: 12,
   },
-  listContainer: {
-    paddingBottom: 20,
-    gap: 10,
-  },
-  emptyText: {
-    color: "#64748B",
-    textAlign: "center",
-    marginTop: 40,
+  loadingText: {
+    color: "#94A3B8",
     fontSize: 14,
+    fontWeight: "600",
   },
-  rankCard: {
+  listContent: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  card: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     backgroundColor: "#0F172A",
+    borderRadius: 16,
     padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#1E293B",
+  },
+  cardTopThree: {
+    borderColor: "#334155",
+    backgroundColor: "#1E293B",
+  },
+  rankBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justify: "center",
+    marginRight: 14,
+  },
+  rankBadgeText: {
+    color: "#F8FAFC",
+    fontWeight: "900",
+    fontSize: 14,
+  },
+  playerInfo: {
+    flex: 1,
+  },
+  playerName: {
+    color: "#F8FAFC",
+    fontWeight: "800",
+    fontSize: 16,
+  },
+  playerLevel: {
+    color: "#64748B",
+    fontSize: 12,
+    marginTop: 2,
+    fontWeight: "600",
+  },
+  scoreContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#020617",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#1E293B",
   },
-  currentUserRankCard: {
-    borderColor: "#EAB308",
-    backgroundColor: "#1E293B",
-  },
-  rankLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  rankBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.03)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  rankNumberText: {
-    color: "#94A3B8",
-    fontWeight: "700",
+  scoreText: {
+    color: "#EAB308",
+    fontWeight: "900",
     fontSize: 14,
   },
-  userNameText: {
-    color: "#F8FAFC",
-    fontWeight: "600",
-    fontSize: 15,
-  },
-  currentUserNameText: {
-    color: "#EAB308",
-    fontWeight: "700",
-  },
-  scoreBadge: {
-    flexDirection: "row",
+  emptyContainer: {
     alignItems: "center",
-    gap: 4,
-    backgroundColor: "rgba(234, 179, 8, 0.1)",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
+    justify: "center",
+    paddingVertical: 60,
+    gap: 8,
   },
-  scoreValueText: {
-    color: "#EAB308",
+  emptyText: {
+    color: "#F8FAFC",
+    fontSize: 16,
     fontWeight: "700",
+  },
+  emptySubText: {
+    color: "#64748B",
     fontSize: 13,
   },
 });
