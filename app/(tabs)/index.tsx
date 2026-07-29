@@ -12,9 +12,10 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
-// Firebase Firestore Bağlantısı
+// Firebase Firestore & Auth
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
-import { db } from "../../firebaseConfig";
+import { onAuthStateChanged, User } from "firebase/auth";
+import { auth, db } from "../../firebaseConfig";
 
 interface UserProfile {
   username: string;
@@ -25,44 +26,55 @@ interface UserProfile {
 export default function AnaMenuEkrani() {
   const router = useRouter();
 
+  const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile>({
-    username: "Abdullah",
-    coins: 1250,
-    currentLevel: 25,
+    username: "Oyuncu",
+    coins: 1000,
+    currentLevel: 1,
   });
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    const userDocRef = doc(db, "users", "demo_user_id");
+    // Oturum açan aktif kullanıcıyı dinle
+    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
 
-    // Canlı Veri Dinleyicisi
-    const unsubscribe = onSnapshot(
-      userDocRef,
-      (docSnap) => {
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setProfile({
-            username: data.username || "Abdullah",
-            coins: data.coins ?? 1250,
-            currentLevel: data.currentLevel ?? 25,
-          });
-        } else {
-          // Doküman yoksa varsayılan veriyi Firestore'a ilk kez yaz
-          setDoc(userDocRef, {
-            username: "Abdullah",
-            coins: 1250,
-            currentLevel: 25,
-          });
-        }
-        setLoading(false);
-      },
-      (error) => {
-        console.log("Firestore Dinleme Hatası:", error);
+      if (currentUser) {
+        const userDocRef = doc(db, "users", currentUser.uid);
+
+        // Dinamik UID ile Firestore dinleyicisi
+        const unsubscribeDoc = onSnapshot(
+          userDocRef,
+          (docSnap) => {
+            if (docSnap.exists()) {
+              const data = docSnap.data();
+              setProfile({
+                username: data.username || currentUser.displayName || "Oyuncu",
+                coins: data.coins ?? 1000,
+                currentLevel: data.currentLevel ?? 1,
+              });
+            } else {
+              setDoc(userDocRef, {
+                username: currentUser.displayName || "Oyuncu",
+                coins: 1000,
+                currentLevel: 1,
+              });
+            }
+            setLoading(false);
+          },
+          (error) => {
+            console.log("Firestore Dinleme Hatası:", error);
+            setLoading(false);
+          }
+        );
+
+        return () => unsubscribeDoc();
+      } else {
         setLoading(false);
       }
-    );
+    });
 
-    return () => unsubscribe();
+    return () => unsubscribeAuth();
   }, []);
 
   return (
@@ -94,7 +106,7 @@ export default function AnaMenuEkrani() {
           </Text>
         </View>
 
-        {/* Hızlı Oyuna Başla (Büyük Karşılama Kartı) */}
+        {/* Hızlı Oyuna Başla Kartı */}
         <TouchableOpacity
           style={styles.playCard}
           activeOpacity={0.88}

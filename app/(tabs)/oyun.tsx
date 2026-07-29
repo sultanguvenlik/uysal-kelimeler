@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -13,9 +13,10 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { GAME_LEVELS } from "../../constants/levels";
 
-// Firebase Firestore Servisleri
-import { doc, setDoc, increment } from "firebase/firestore";
-import { db } from "../../firebaseConfig";
+// Firebase Firestore & Auth Servisleri
+import { doc, setDoc, increment, onSnapshot } from "firebase/firestore";
+import { onAuthStateChanged, User } from "firebase/auth";
+import { auth, db } from "../../firebaseConfig";
 
 const { width } = Dimensions.get("window");
 const WHEEL_SIZE = Math.min(width * 0.72, 290);
@@ -23,27 +24,59 @@ const BUTTON_SIZE = 52;
 const RADIUS = WHEEL_SIZE / 2 - BUTTON_SIZE / 2 - 16;
 
 export default function OyunEkrani() {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentLevelIndex, setCurrentLevelIndex] = useState(0);
-  const currentLevelData = GAME_LEVELS[currentLevelIndex];
+  const currentLevelData = GAME_LEVELS[currentLevelIndex] || GAME_LEVELS[0];
 
   const [selectedIndexes, setSelectedIndexes] = useState<number[]>([]);
-  const [score, setScore] = useState(1150);
+  const [score, setScore] = useState(1000);
   const [foundWords, setFoundWords] = useState<string[]>([]);
-  
-  // Bulunmamış kelimelerde ipucu ile açılan harflerin indislerini saklar { "KALEM": [0, 1] }
   const [revealedHints, setRevealedHints] = useState<Record<string, number[]>>({});
 
-  const currentWord = selectedIndexes.map((i) => currentLevelData.letters[i]).join("");
+  const currentWord = selectedIndexes
+    .map((i) => currentLevelData.letters[i])
+    .join("");
+
+  // Dinamik Oturum ve Firestore Kullanıcı Bakiyesi Dinleyici
+  useEffect(() => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+
+      if (user) {
+        const userDocRef = doc(db, "users", user.uid);
+        const unsubscribeDoc = onSnapshot(userDocRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setScore(data.coins ?? 1000);
+
+            // Kullanıcının kaldığı seviyeyi yükle
+            const levelFromDb = (data.currentLevel || 1) - 1;
+            if (levelFromDb >= 0 && levelFromDb < GAME_LEVELS.length) {
+              setCurrentLevelIndex(levelFromDb);
+            }
+          }
+        });
+
+        return () => unsubscribeDoc();
+      }
+    });
+
+    return () => unsubscribeAuth();
+  }, []);
 
   // Firestore Veritabanına Skoru ve Seviyeyi Senkronize Etme
-  const syncProgressToFirestore = async (addedCoins: number, nextLevelNum: number) => {
+  const syncProgressToFirestore = async (
+    addedCoins: number,
+    nextLevelNum: number
+  ) => {
+    if (!currentUser) return;
+
     try {
-      const userDocRef = doc(db, "users", "demo_user_id");
+      const userDocRef = doc(db, "users", currentUser.uid);
 
       await setDoc(
         userDocRef,
         {
-          username: "Abdullah",
           coins: increment(addedCoins),
           currentLevel: nextLevelNum,
         },
@@ -55,20 +88,19 @@ export default function OyunEkrani() {
     }
   };
 
-  // İpucu Kullanma Mantığı (Yukarıdaki Kutucukta Harf Açma)
+  // İpucu Kullanma Mantığı (50 Altın)
   const handleUseHint = () => {
     const HINT_COST = 50;
 
     if (score < HINT_COST) {
       Alert.alert(
         "Yetersiz Altın!",
-        "İpucu almak için en az 50 altınınız olmalıdır. Market sekmesinden altın bakiyesi ekleyebilirsiniz.",
+        "İpucu almak için en az 50 altınınız olmalıdır. Market sekmesinden altın yükleyebilirsiniz.",
         [{ text: "Tamam" }]
       );
       return;
     }
 
-    // Henüz bulunmamış kelimeleri filtrele
     const uncompleteWords = currentLevelData.targetWords.filter(
       (w) => !foundWords.includes(w)
     );
@@ -78,14 +110,12 @@ export default function OyunEkrani() {
       return;
     }
 
-    // Tamamen açılmamış ilk kelimeyi bul
     let targetWordToHint = "";
     let charIndexToOpen = -1;
 
     for (const word of uncompleteWords) {
       const openedIndexes = revealedHints[word] || [];
       if (openedIndexes.length < word.length) {
-        // Bu kelimede henüz açılmamış ilk harfin indeksini tespit et
         for (let i = 0; i < word.length; i++) {
           if (!openedIndexes.includes(i)) {
             targetWordToHint = word;
@@ -105,10 +135,6 @@ export default function OyunEkrani() {
       };
 
       setRevealedHints(updatedHints);
-      const newScore = score - HINT_COST;
-      setScore(newScore);
-
-      // Veritabanından -50 Altın Düş
       syncProgressToFirestore(-HINT_COST, currentLevelData.id);
     } else {
       Alert.alert("Bilgi", "Açılabilecek başka ipucu kalmadı!");
@@ -135,16 +161,14 @@ export default function OyunEkrani() {
         const updatedFound = [...foundWords, currentWord];
         setFoundWords(updatedFound);
         const rewardCoins = currentWord.length * 10;
-        setScore((prev) => prev + rewardCoins);
 
-        // Bölümdeki TÜM kelimeler tamamlandı mı?
         if (updatedFound.length === currentLevelData.targetWords.length) {
           const nextLevelNumber = currentLevelData.id + 1;
           syncProgressToFirestore(rewardCoins + 100, nextLevelNumber);
 
           Alert.alert(
             "Bölüm Tamamlandı! 🎉",
-            `Tebrikler Hazretleri! Bölüm ${currentLevelData.id} bitti, +100 Bonus Altın kazandınız!`,
+            `Tebrikler! Bölüm ${currentLevelData.id} bitti, +100 Bonus Altın kazandınız!`,
             [
               {
                 text: "Sonraki Bölüme Geç",
@@ -175,13 +199,9 @@ export default function OyunEkrani() {
     }
   };
 
-  // İpucu ve Bulunma durumuna göre kelime harflerini oluşturan render fonksiyonu
   const renderWordSlotText = (word: string) => {
     const isFound = foundWords.includes(word);
-
-    if (isFound) {
-      return word;
-    }
+    if (isFound) return word;
 
     const hints = revealedHints[word] || [];
     return word
@@ -200,11 +220,11 @@ export default function OyunEkrani() {
 
         <View style={styles.scoreBadge}>
           <Ionicons name="flash" size={16} color="#EAB308" />
-          <Text style={styles.scoreText}>{score}</Text>
+          <Text style={styles.scoreText}>{score.toLocaleString()}</Text>
         </View>
       </View>
 
-      {/* Bulunan / İpucu Verilen Kelimeler Izgarası */}
+      {/* Bulunan Kelimeler Izgarası */}
       <View style={styles.wordsContainer}>
         <Text style={styles.sectionHeader}>BULUNACAK KELİMELER</Text>
         <View style={styles.wordsGrid}>
@@ -298,7 +318,6 @@ export default function OyunEkrani() {
           <Text style={styles.mainActionBtnText}>KONTROL ET</Text>
         </TouchableOpacity>
 
-        {/* İpucu Alma Butonu (50 Altın) */}
         <TouchableOpacity
           style={styles.iconCircleBtn}
           activeOpacity={0.8}

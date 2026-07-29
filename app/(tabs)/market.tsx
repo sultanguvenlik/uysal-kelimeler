@@ -12,9 +12,10 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-// Firebase Firestore Servisleri
+// Firebase Firestore & Auth
 import { doc, onSnapshot, setDoc, increment } from "firebase/firestore";
-import { db } from "../../firebaseConfig";
+import { onAuthStateChanged, User } from "firebase/auth";
+import { auth, db } from "../../firebaseConfig";
 
 interface MarketItem {
   id: string;
@@ -32,23 +33,36 @@ const COIN_PACKAGES: MarketItem[] = [
 ];
 
 export default function MarketEkrani() {
+  const [user, setUser] = useState<User | null>(null);
   const [coins, setCoins] = useState<number>(0);
 
   useEffect(() => {
-    const userDocRef = doc(db, "users", "demo_user_id");
+    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
 
-    const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
-      if (docSnap.exists()) {
-        setCoins(docSnap.data().coins || 0);
+      if (currentUser) {
+        const userDocRef = doc(db, "users", currentUser.uid);
+        const unsubscribeDoc = onSnapshot(userDocRef, (docSnap) => {
+          if (docSnap.exists()) {
+            setCoins(docSnap.data().coins || 0);
+          }
+        });
+
+        return () => unsubscribeDoc();
       }
     });
 
-    return () => unsubscribe();
+    return () => unsubscribeAuth();
   }, []);
 
   const handleBuyPackage = async (pack: MarketItem) => {
+    if (!user) {
+      Alert.alert("Hata", "Lütfen önce giriş yapın.");
+      return;
+    }
+
     try {
-      const userDocRef = doc(db, "users", "demo_user_id");
+      const userDocRef = doc(db, "users", user.uid);
 
       await setDoc(
         userDocRef,
@@ -60,7 +74,7 @@ export default function MarketEkrani() {
 
       Alert.alert(
         "Satın Alma Başarılı! 🎉",
-        `Tebrikler Hazretleri! Hesabınıza +${pack.coins} Altın tanımlandı.`,
+        `Tebrikler! Hesabınıza +${pack.coins} Altın tanımlandı.`,
         [{ text: "Harika" }]
       );
     } catch (error) {
