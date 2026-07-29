@@ -11,6 +11,7 @@ export const GAME_CATEGORIES = [
   "Genel Kültür",
   "Edebiyat",
   "Osmanlıca",
+  "İngilizce",
 ];
 
 export const GAME_LEVELS: LevelData[] = [
@@ -72,6 +73,32 @@ export const GAME_LEVELS: LevelData[] = [
       HAYA: "Utanma duygusu, ar, namus, edep.",
       TAYA: "Çocuk bakıcısı, mürebbiye.",
       TAY: "Bir yaşındaki at yavrusu.",
+    },
+  },
+  {
+    id: 6,
+    category: "İngilizce",
+    letters: ["S", "M", "A", "R", "T"],
+    targetWords: ["SMART", "STAR", "ARTS", "MATS", "RAM"],
+    definitions: {
+      SMART: "Zeki, akıllı, şık.",
+      STAR: "Yıldız, ünlü kimse.",
+      ARTS: "Sanatlar, zanaatlar.",
+      MATS: "Paspaslar, minderler.",
+      RAM: "Koç, rastgele erişimli bellek (RAM).",
+    },
+  },
+  {
+    id: 7,
+    category: "İngilizce",
+    letters: ["D", "R", "E", "A", "M"],
+    targetWords: ["DREAM", "READ", "MADE", "DEAR", "RED"],
+    definitions: {
+      DREAM: "Rüya, hayal etmek.",
+      READ: "Okumak.",
+      MADE: "Yapılmış, etmek (Make kelimesinin geçmiş zamanı).",
+      DEAR: "Sevgili, değerli, pahalı.",
+      RED: "Kırmızı renk.",
     },
   },
 ];
